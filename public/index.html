@@ -3,20 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, touch-action: manipulation">
-    <title>OsRace 3D - Çarpışmalı Yarış</title>
+    <title>OsRace 3D</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div id="menu">
         <h1>🏁 OsRace 3D 🏁</h1>
-        <p style="color:#aaa; margin-bottom:15px;">Botlarla veya Arkadaşınla Yarış!</p>
-        
-        <!-- Tek başına botlarla oyna -->
         <button id="singlePlayerBtn">🤖 Botlarla Tek Başına Oyna</button>
-        
         <div class="separator">— veya —</div>
-        
-        <!-- Çok oyunculu -->
         <button id="multiplayerBtn">🌐 Çevrimiçi Çok Oyunculu</button>
         
         <div id="multiplayerPanel" class="hidden">
@@ -50,7 +44,12 @@
 
     <script src="/socket.io/socket.io.js"></script>
     <script type="importmap">
-        { "imports": { "three": "https://unpkg.com/three@0.152.0/build/three.module.js" } }
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.152.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.152.0/examples/jsm/"
+            }
+        }
     </script>
     <script type="module" src="game.js"></script>
 </body>
