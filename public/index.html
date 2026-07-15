@@ -3,24 +3,22 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, touch-action: manipulation">
-    <title>OsRace 3D - Mobil Yarış</title>
+    <title>OsRace 3D - 2 Kişilik Yarış</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div id="menu">
         <h1>🏁 OsRace 3D 🏁</h1>
-        <button id="singlePlayerBtn">🏎️ Botlarla Tek Başına</button>
-        <button id="multiplayerBtn">🌐 Çevrimiçi Çok Oyunculu</button>
-        <div id="multiplayerPanel" class="hidden">
-            <input type="text" id="playerNameInput" placeholder="Adın" maxlength="12" />
-            <button id="createRoomBtn">Oda Oluştur</button>
-            <div class="separator">— veya —</div>
-            <input type="text" id="roomIdInput" placeholder="Oda ID" maxlength="4" />
-            <button id="joinRoomBtn">Odaya Katıl</button>
-            <div id="roomInfo" class="hidden">
-                <p>Oda ID: <span id="displayRoomId"></span></p>
-                <button id="startRaceBtn">Yarışı Başlat</button>
-            </div>
+        <p style="color:#aaa; margin-bottom:15px;">2 Kişilik Çarpışmalı Yarış</p>
+        <input type="text" id="playerNameInput" placeholder="Adın" maxlength="12" />
+        <button id="createRoomBtn">🎯 Oda Oluştur</button>
+        <div class="separator">— veya —</div>
+        <input type="text" id="roomIdInput" placeholder="Oda ID'si" maxlength="4" />
+        <button id="joinRoomBtn">🚪 Odaya Katıl</button>
+        <div id="roomInfo" class="hidden">
+            <p>Oda ID: <span id="displayRoomId"></span></p>
+            <p id="playerCount">Oyuncu: 1/2</p>
+            <p style="color:#f0a500; font-size:0.9rem;">2. oyuncu katılınca yarış otomatik başlar</p>
         </div>
     </div>
 
@@ -30,7 +28,6 @@
             <div id="speedometer">0 km/h</div>
             <div id="countdownDisplay" class="hidden"></div>
         </div>
-        <!-- Mobil Dokunmatik Kontroller -->
         <div id="touchControls" class="hidden">
             <div id="steerLeft" class="touch-btn">◀</div>
             <div id="steerRight" class="touch-btn">▶</div>
@@ -42,11 +39,7 @@
 
     <script src="/socket.io/socket.io.js"></script>
     <script type="importmap">
-        {
-            "imports": {
-                "three": "https://unpkg.com/three@0.152.0/build/three.module.js"
-            }
-        }
+        { "imports": { "three": "https://unpkg.com/three@0.152.0/build/three.module.js" } }
     </script>
     <script type="module" src="game.js"></script>
 </body>
