@@ -109,10 +109,10 @@ const TRACK_HALF = TRACK_WIDTH / 2;
 // ========== Three.js Sahnesi ==========
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87CEEB);
-scene.fog = new THREE.Fog(0x87CEEB, 120, 300);
+scene.fog = new THREE.Fog(0x87CEEB, 200, 600);
 
-const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 1, 400);
-camera.position.set(0, 15, 30);
+const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 1, 800);
+camera.position.set(0, 30, 60);
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
@@ -124,105 +124,24 @@ document.getElementById('gameUI').appendChild(renderer.domElement);
 
 // Işıklandırma
 scene.add(new THREE.AmbientLight(0x8899bb, 0.6));
-const sunLight = new THREE.DirectionalLight(0xfff5e8, 1.2);
-sunLight.position.set(80, 100, 40);
+const sunLight = new THREE.DirectionalLight(0xfff5e8, 1.5);
+sunLight.position.set(150, 200, 80);
 sunLight.castShadow = true;
-sunLight.shadow.mapSize.set(2048, 2048);
+sunLight.shadow.mapSize.set(4096, 4096);
 sunLight.shadow.camera.near = 1;
-sunLight.shadow.camera.far = 400;
-sunLight.shadow.camera.left = -150;
-sunLight.shadow.camera.right = 150;
-sunLight.shadow.camera.top = 150;
-sunLight.shadow.camera.bottom = -150;
-sunLight.shadow.bias = -0.0005;
+sunLight.shadow.camera.far = 800;
+sunLight.shadow.camera.left = -300;
+sunLight.shadow.camera.right = 300;
+sunLight.shadow.camera.top = 300;
+sunLight.shadow.camera.bottom = -300;
+sunLight.shadow.bias = -0.0003;
 scene.add(sunLight);
 
 const fillLight = new THREE.DirectionalLight(0x8899cc, 0.4);
-fillLight.position.set(-30, 30, -30);
+fillLight.position.set(-60, 60, -60);
 scene.add(fillLight);
 
-// ========== PİST OLUŞTUR (Yedek - GLB yoksa) ==========
-function createTrack() {
-    const trackGroup = new THREE.Group();
-    const points = WAYPOINTS.map(wp => new THREE.Vector3(wp.x, 0.02, wp.z));
-    const curve = new THREE.CatmullRomCurve3(points, true);
-    const divisions = 300;
-    const roadPoints = curve.getPoints(divisions);
-
-    const vertices = [];
-    const indices = [];
-    for (let i = 0; i <= divisions; i++) {
-        const pt = roadPoints[i];
-        const tangent = curve.getTangent(i / divisions).normalize();
-        const perp = new THREE.Vector3(-tangent.z, 0, tangent.x).normalize();
-        const left = pt.clone().addScaledVector(perp, TRACK_HALF);
-        const right = pt.clone().addScaledVector(perp, -TRACK_HALF);
-        vertices.push(left.x, left.y, left.z);
-        vertices.push(right.x, right.y, right.z);
-    }
-    for (let i = 0; i < divisions; i++) {
-        const a = i * 2, b = i * 2 + 1, c = (i + 1) * 2, d = (i + 1) * 2 + 1;
-        indices.push(a, b, c);
-        indices.push(b, d, c);
-    }
-    const roadGeom = new THREE.BufferGeometry();
-    roadGeom.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
-    roadGeom.setIndex(indices);
-    roadGeom.computeVertexNormals();
-    const roadMesh = new THREE.Mesh(roadGeom, new THREE.MeshStandardMaterial({ color: 0x444444, roughness: 0.6 }));
-    roadMesh.receiveShadow = true;
-    trackGroup.add(roadMesh);
-
-    for (let i = 0; i < divisions; i += 5) {
-        const pt = roadPoints[i];
-        const tangent = curve.getTangent(i / divisions).normalize();
-        const perp = new THREE.Vector3(-tangent.z, 0, tangent.x).normalize();
-        const leftPos = pt.clone().addScaledVector(perp, TRACK_HALF);
-        const rightPos = pt.clone().addScaledVector(perp, -TRACK_HALF);
-        const lineGeom = new THREE.PlaneGeometry(0.3, 2);
-        const lineMat = new THREE.MeshStandardMaterial({ color: 0xffffff, side: THREE.DoubleSide });
-        const leftLine = new THREE.Mesh(lineGeom, lineMat);
-        leftLine.position.copy(leftPos); leftLine.position.y = 0.03;
-        leftLine.rotation.y = Math.atan2(tangent.x, tangent.z);
-        trackGroup.add(leftLine);
-        const rightLine = new THREE.Mesh(lineGeom, lineMat);
-        rightLine.position.copy(rightPos); rightLine.position.y = 0.03;
-        rightLine.rotation.y = Math.atan2(tangent.x, tangent.z);
-        trackGroup.add(rightLine);
-    }
-
-    const barrierMat = new THREE.MeshStandardMaterial({ color: 0xff4444, roughness: 0.5 });
-    for (let i = 0; i < divisions; i += 3) {
-        const pt = roadPoints[i];
-        const tangent = curve.getTangent(i / divisions).normalize();
-        const perp = new THREE.Vector3(-tangent.z, 0, tangent.x).normalize();
-        const leftPos = pt.clone().addScaledVector(perp, TRACK_HALF + 0.5);
-        const rightPos = pt.clone().addScaledVector(perp, -TRACK_HALF - 0.5);
-        const barGeom = new THREE.BoxGeometry(0.3, 0.6, 2.5);
-        const leftBar = new THREE.Mesh(barGeom, barrierMat);
-        leftBar.position.copy(leftPos); leftBar.position.y = 0.3;
-        leftBar.rotation.y = Math.atan2(tangent.x, tangent.z);
-        leftBar.castShadow = true; leftBar.receiveShadow = true;
-        trackGroup.add(leftBar);
-        const rightBar = new THREE.Mesh(barGeom, barrierMat);
-        rightBar.position.copy(rightPos); rightBar.position.y = 0.3;
-        rightBar.rotation.y = Math.atan2(tangent.x, tangent.z);
-        rightBar.castShadow = true; rightBar.receiveShadow = true;
-        trackGroup.add(rightBar);
-    }
-
-    const finishLine = new THREE.Mesh(
-        new THREE.PlaneGeometry(5, 1.5),
-        new THREE.MeshStandardMaterial({ color: 0xffaa00, side: THREE.DoubleSide, emissive: 0x331100 })
-    );
-    finishLine.position.set(0, 0.04, 20);
-    finishLine.rotation.x = -Math.PI / 2;
-    trackGroup.add(finishLine);
-
-    scene.add(trackGroup);
-}
-
-// ========== GLB MODEL YÜKLE ==========
+// ========== GLB MODEL YÜKLE (20 KAT BÜYÜK) ==========
 let modelLoaded = false;
 
 // GLTFLoader dinamik import
@@ -239,8 +158,8 @@ import('three/addons/loaders/GLTFLoader.js').then(module => {
             modelLoaded = true;
             
             const model = gltf.scene;
-            model.position.set(0, 0.05, 0);
-            model.scale.set(1, 1, 1);
+            model.position.set(0, 0, 0);
+            model.scale.set(20, 20, 20);  // 20 KAT BÜYÜTÜLDÜ
             
             model.traverse((child) => {
                 if (child.isMesh) {
@@ -275,7 +194,7 @@ import('three/addons/loaders/GLTFLoader.js').then(module => {
         },
         (error) => {
             console.warn('⚠️ GLB yüklenemedi, yedek pist oluşturuluyor:', error.message);
-            createTrack();
+            createFallbackTrack();
             const loadingScreen = document.getElementById('loadingScreen');
             if (loadingScreen) {
                 setTimeout(() => {
@@ -286,8 +205,8 @@ import('three/addons/loaders/GLTFLoader.js').then(module => {
         }
     );
 }).catch(err => {
-    console.warn('⚠️ GLTFLoader import edilemedi, yedek pist oluşturuluyor:', err.message);
-    createTrack();
+    console.warn('⚠️ GLTFLoader import edilemedi:', err.message);
+    createFallbackTrack();
     const loadingScreen = document.getElementById('loadingScreen');
     if (loadingScreen) {
         setTimeout(() => {
@@ -297,44 +216,80 @@ import('three/addons/loaders/GLTFLoader.js').then(module => {
     }
 });
 
-// Beton zemin
-const groundGeom = new THREE.PlaneGeometry(400, 400);
+// Yedek pist (GLB yoksa)
+function createFallbackTrack() {
+    console.log('⚠️ Yedek pist oluşturuluyor...');
+    const trackGroup = new THREE.Group();
+    const points = WAYPOINTS.map(wp => new THREE.Vector3(wp.x, 0.02, wp.z));
+    const curve = new THREE.CatmullRomCurve3(points, true);
+    const divisions = 300;
+    const roadPoints = curve.getPoints(divisions);
+
+    const vertices = [];
+    const indices = [];
+    for (let i = 0; i <= divisions; i++) {
+        const pt = roadPoints[i];
+        const tangent = curve.getTangent(i / divisions).normalize();
+        const perp = new THREE.Vector3(-tangent.z, 0, tangent.x).normalize();
+        const left = pt.clone().addScaledVector(perp, TRACK_HALF);
+        const right = pt.clone().addScaledVector(perp, -TRACK_HALF);
+        vertices.push(left.x, left.y, left.z);
+        vertices.push(right.x, right.y, right.z);
+    }
+    for (let i = 0; i < divisions; i++) {
+        const a = i * 2, b = i * 2 + 1, c = (i + 1) * 2, d = (i + 1) * 2 + 1;
+        indices.push(a, b, c);
+        indices.push(b, d, c);
+    }
+    const roadGeom = new THREE.BufferGeometry();
+    roadGeom.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+    roadGeom.setIndex(indices);
+    roadGeom.computeVertexNormals();
+    const roadMesh = new THREE.Mesh(roadGeom, new THREE.MeshStandardMaterial({ color: 0x444444, roughness: 0.6 }));
+    roadMesh.receiveShadow = true;
+    trackGroup.add(roadMesh);
+
+    const barrierMat = new THREE.MeshStandardMaterial({ color: 0xff4444, roughness: 0.5 });
+    for (let i = 0; i < divisions; i += 3) {
+        const pt = roadPoints[i];
+        const tangent = curve.getTangent(i / divisions).normalize();
+        const perp = new THREE.Vector3(-tangent.z, 0, tangent.x).normalize();
+        const leftPos = pt.clone().addScaledVector(perp, TRACK_HALF + 0.5);
+        const rightPos = pt.clone().addScaledVector(perp, -TRACK_HALF - 0.5);
+        const barGeom = new THREE.BoxGeometry(0.3, 0.6, 2.5);
+        const leftBar = new THREE.Mesh(barGeom, barrierMat);
+        leftBar.position.copy(leftPos); leftBar.position.y = 0.3;
+        leftBar.rotation.y = Math.atan2(tangent.x, tangent.z);
+        leftBar.castShadow = true; leftBar.receiveShadow = true;
+        trackGroup.add(leftBar);
+        const rightBar = new THREE.Mesh(barGeom, barrierMat);
+        rightBar.position.copy(rightPos); rightBar.position.y = 0.3;
+        rightBar.rotation.y = Math.atan2(tangent.x, tangent.z);
+        rightBar.castShadow = true; rightBar.receiveShadow = true;
+        trackGroup.add(rightBar);
+    }
+
+    const finishLine = new THREE.Mesh(
+        new THREE.PlaneGeometry(5, 1.5),
+        new THREE.MeshStandardMaterial({ color: 0xffaa00, side: THREE.DoubleSide, emissive: 0x331100 })
+    );
+    finishLine.position.set(0, 0.04, 20);
+    finishLine.rotation.x = -Math.PI / 2;
+    trackGroup.add(finishLine);
+
+    scene.add(trackGroup);
+}
+
+// Beton zemin (büyütüldü)
+const groundGeom = new THREE.PlaneGeometry(600, 600);
 const groundMat = new THREE.MeshStandardMaterial({ color: 0x666666, roughness: 0.9 });
 const ground = new THREE.Mesh(groundGeom, groundMat);
 ground.rotation.x = -Math.PI / 2;
-ground.position.y = -0.05;
+ground.position.y = -0.1;
 ground.receiveShadow = true;
 scene.add(ground);
 
-// Ağaçlar
-for (let i = 0; i < 60; i++) {
-    const tree = new THREE.Group();
-    const trunkH = 2 + Math.random() * 2;
-    const trunk = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.3, 0.5, trunkH),
-        new THREE.MeshStandardMaterial({ color: 0x8B4513 })
-    );
-    trunk.position.y = trunkH / 2;
-    trunk.castShadow = true;
-    trunk.receiveShadow = true;
-    tree.add(trunk);
-    
-    const foliageR = 0.8 + Math.random() * 1.2;
-    const foliageH = 2 + Math.random() * 2;
-    const foliage = new THREE.Mesh(
-        new THREE.ConeGeometry(foliageR, foliageH, 8),
-        new THREE.MeshStandardMaterial({ color: new THREE.Color().setHSL(0.25 + Math.random() * 0.1, 0.8, 0.3 + Math.random() * 0.2) })
-    );
-    foliage.position.y = trunkH + foliageH / 3;
-    foliage.castShadow = true;
-    foliage.receiveShadow = true;
-    tree.add(foliage);
-    
-    const angle = Math.random() * Math.PI * 2;
-    const radius = 30 + Math.random() * 60;
-    tree.position.set(Math.cos(angle) * radius, 0, Math.sin(angle) * radius);
-    scene.add(tree);
-}
+// AĞAÇLAR KALDIRILDI
 
 // Araba modeli
 function createCarModel(color = 0xff4500) {
@@ -376,16 +331,16 @@ const playerCar = createCarModel(0xff4500);
 scene.add(playerCar);
 const carMeshes = new Map();
 
-// Kamera takip
+// Kamera takip (büyük haritaya göre ayarlandı)
 function updateCamera(pos, angle) {
-    const dist = 14, h = 7;
+    const dist = 20, h = 10;
     const backX = pos.x - Math.sin(angle) * dist;
     const backZ = pos.z - Math.cos(angle) * dist;
-    camera.position.lerp(new THREE.Vector3(backX, pos.y + h, backZ), 0.05);
+    camera.position.lerp(new THREE.Vector3(backX, pos.y + h, backZ), 0.04);
     camera.lookAt(pos.x, pos.y + 1, pos.z);
 }
 
-// ========== KONTROLLER (DÜZELTİLDİ - SOL SAĞ YÖNLER) ==========
+// ========== KONTROLLER (SOL-SAĞ DÜZELTİLDİ) ==========
 const keys = { up: false, down: false, left: false, right: false };
 
 window.addEventListener('keydown', (e) => {
@@ -449,7 +404,6 @@ class NetworkGame {
         this.myId = socket.id;
         this.entities = new Map();
         this.predicted = { x: 0, z: 0, angle: 0, speed: 0 };
-        this.lastCrashSound = 0;
 
         this.socket.on('room-created', (data) => {
             console.log('✅ Oda oluşturuldu:', data.roomId);
@@ -504,7 +458,6 @@ class NetworkGame {
                 this.predicted.speed = me.speed;
             }
             
-            // Diğer oyuncular
             state.players.forEach(p => {
                 if (p.id === this.myId) return;
                 if (!this.entities.has(p.id)) {
@@ -523,7 +476,6 @@ class NetworkGame {
                 }
             });
             
-            // Botlar
             if (state.bots) {
                 state.bots.forEach(b => {
                     if (!this.entities.has(b.id)) {
@@ -543,7 +495,6 @@ class NetworkGame {
                 });
             }
 
-            // Pozisyon güncelle
             if (me) {
                 const all = [...state.players, ...(state.bots || [])];
                 all.sort((a, b) => b.lap - a.lap);
@@ -582,7 +533,6 @@ class NetworkGame {
         let a = this.predicted.angle;
         let s = this.predicted.speed;
         
-        // DÜZELTİLDİ: SOL = AÇI AZALIR (sola dön), SAĞ = AÇI ARTAR (sağa dön)
         if (keys.left) a -= 2.8 * dt;
         if (keys.right) a += 2.8 * dt;
         if (keys.up) s += 14 * dt;
@@ -597,23 +547,23 @@ class NetworkGame {
         this.predicted.angle = a;
         this.predicted.speed = s;
 
-        playerCar.position.set(this.predicted.x, 0.15, this.predicted.z);
+        // ARABA YERE BASIYOR (y: 0.6)
+        playerCar.position.set(this.predicted.x, 0.6, this.predicted.z);
         playerCar.rotation.y = this.predicted.angle;
         updateCamera(playerCar.position, this.predicted.angle);
         sound.updateEngine(s, 25);
 
-        // Diğer arabaları interpolasyonla güncelle
         const now = performance.now();
         this.entities.forEach(e => {
             const t = Math.min((now - e.lastUpdate) / 50, 1);
             e.current.x += (e.target.x - e.current.x) * t;
             e.current.z += (e.target.z - e.current.z) * t;
             e.current.angle += (e.target.angle - e.current.angle) * t;
-            e.mesh.position.set(e.current.x, 0.15, e.current.z);
+            // DİĞER ARABALAR DA YERE BASIYOR
+            e.mesh.position.set(e.current.x, 0.6, e.current.z);
             e.mesh.rotation.y = e.current.angle;
         });
 
-        // HUD
         const me = this.serverState?.players?.find(p => p.id === this.myId);
         if (me) {
             document.getElementById('lapCounter').textContent = `Tur: ${me.lap}/3`;
@@ -624,7 +574,9 @@ class NetworkGame {
 
 // ========== MENÜ BUTONLARI ==========
 console.log('🚀 OsRace 3D başlatılıyor...');
-console.log('📦 GLB model: /models/RaceMap.glb');
+console.log('📦 GLB model: /models/RaceMap.glb (20x scale)');
+console.log('🌳 Ağaçlar kaldırıldı');
+console.log('🚗 Arabalar yere basıyor');
 
 const singleBtn = document.getElementById('singlePlayerBtn');
 const multiBtn = document.getElementById('multiplayerBtn');
