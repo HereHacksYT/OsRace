@@ -3,22 +3,33 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, touch-action: manipulation">
-    <title>OsRace 3D - 2 Kişilik Yarış</title>
+    <title>OsRace 3D - Çarpışmalı Yarış</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div id="menu">
         <h1>🏁 OsRace 3D 🏁</h1>
-        <p style="color:#aaa; margin-bottom:15px;">2 Kişilik Çarpışmalı Yarış</p>
-        <input type="text" id="playerNameInput" placeholder="Adın" maxlength="12" />
-        <button id="createRoomBtn">🎯 Oda Oluştur</button>
+        <p style="color:#aaa; margin-bottom:15px;">Botlarla veya Arkadaşınla Yarış!</p>
+        
+        <!-- Tek başına botlarla oyna -->
+        <button id="singlePlayerBtn">🤖 Botlarla Tek Başına Oyna</button>
+        
         <div class="separator">— veya —</div>
-        <input type="text" id="roomIdInput" placeholder="Oda ID'si" maxlength="4" />
-        <button id="joinRoomBtn">🚪 Odaya Katıl</button>
-        <div id="roomInfo" class="hidden">
-            <p>Oda ID: <span id="displayRoomId"></span></p>
-            <p id="playerCount">Oyuncu: 1/2</p>
-            <p style="color:#f0a500; font-size:0.9rem;">2. oyuncu katılınca yarış otomatik başlar</p>
+        
+        <!-- Çok oyunculu -->
+        <button id="multiplayerBtn">🌐 Çevrimiçi Çok Oyunculu</button>
+        
+        <div id="multiplayerPanel" class="hidden">
+            <input type="text" id="playerNameInput" placeholder="Adın" maxlength="12" />
+            <button id="createRoomBtn">🎯 Oda Oluştur</button>
+            <div class="separator">— veya —</div>
+            <input type="text" id="roomIdInput" placeholder="Oda ID'si" maxlength="4" />
+            <button id="joinRoomBtn">🚪 Odaya Katıl</button>
+            <div id="roomInfo" class="hidden">
+                <p>Oda ID: <span id="displayRoomId"></span></p>
+                <p id="playerCount">Oyuncu: 1/2</p>
+                <button id="startRaceBtn">🏁 Yarışı Başlat</button>
+            </div>
         </div>
     </div>
 
