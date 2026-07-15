@@ -96,7 +96,7 @@ const TRACK_HALF = TRACK_WIDTH / 2;
 
 // ========== Three.js Sahnesi ==========
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x87CEEB); // Açık mavi gökyüzü
+scene.background = new THREE.Color(0x87CEEB);
 scene.fog = new THREE.Fog(0x87CEEB, 50, 120);
 
 const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 1, 200);
@@ -133,9 +133,11 @@ ground.rotation.x = -Math.PI / 2;
 ground.receiveShadow = true;
 scene.add(ground);
 
-// Pist oluştur (yol)
+// ========== Pist ve Duvarlar ==========
 function createTrack() {
     const trackGroup = new THREE.Group();
+
+    // Yol yüzeyi (tube)
     const points = WAYPOINTS.map(wp => new THREE.Vector3(wp.x, 0.01, wp.z));
     const curve = new THREE.CatmullRomCurve3(points, true);
     const tubeGeom = new THREE.TubeGeometry(curve, 100, TRACK_HALF, 8, true);
@@ -175,11 +177,50 @@ function createTrack() {
     finishLine.position.set(0, 0.03, 10.5);
     trackGroup.add(finishLine);
 
+    // ====== DUVARLAR ======
+    const wallHeight = 1.2;
+    const wallThickness = 0.3;
+    const wallMat = new THREE.MeshStandardMaterial({ color: 0x8B4513, roughness: 0.7 });
+
+    // Kenar noktalarını daha sık hesapla
+    const wallEdgePoints = curve.getPoints(300);
+    for (let i = 0; i < wallEdgePoints.length - 1; i++) {
+        const p1 = wallEdgePoints[i];
+        const p2 = wallEdgePoints[i + 1];
+        const mid = new THREE.Vector3().addVectors(p1, p2).multiplyScalar(0.5);
+        const dir = new THREE.Vector3().subVectors(p2, p1);
+        const length = dir.length();
+        dir.normalize();
+        const perp = new THREE.Vector3(-dir.z, 0, dir.x);
+
+        // Sol duvar
+        const leftWallPos = mid.clone().addScaledVector(perp, TRACK_HALF);
+        const leftWallGeom = new THREE.BoxGeometry(wallThickness, wallHeight, length);
+        const leftWall = new THREE.Mesh(leftWallGeom, wallMat);
+        leftWall.position.copy(leftWallPos);
+        leftWall.position.y = wallHeight / 2;
+        leftWall.rotation.y = Math.atan2(dir.x, dir.z);
+        leftWall.castShadow = true;
+        leftWall.receiveShadow = true;
+        trackGroup.add(leftWall);
+
+        // Sağ duvar
+        const rightWallPos = mid.clone().addScaledVector(perp, -TRACK_HALF);
+        const rightWallGeom = new THREE.BoxGeometry(wallThickness, wallHeight, length);
+        const rightWall = new THREE.Mesh(rightWallGeom, wallMat);
+        rightWall.position.copy(rightWallPos);
+        rightWall.position.y = wallHeight / 2;
+        rightWall.rotation.y = Math.atan2(dir.x, dir.z);
+        rightWall.castShadow = true;
+        rightWall.receiveShadow = true;
+        trackGroup.add(rightWall);
+    }
+
     scene.add(trackGroup);
 }
 createTrack();
 
-// Ağaçlar vb. (basit)
+// Ağaçlar
 for (let i = 0; i < 30; i++) {
     const treeGroup = new THREE.Group();
     const trunkGeom = new THREE.CylinderGeometry(0.3, 0.4, 2);
@@ -202,7 +243,7 @@ for (let i = 0; i < 30; i++) {
     scene.add(treeGroup);
 }
 
-// Araba modeli (basit kutu + tekerlekler)
+// Araba modeli
 function createCarModel(color = 0xff4500) {
     const car = new THREE.Group();
     const bodyGeom = new THREE.BoxGeometry(1.6, 0.6, 3.2);
@@ -232,21 +273,19 @@ function createCarModel(color = 0xff4500) {
     return car;
 }
 
-// Oyuncu ve bot arabalarını tutacak Map'ler
-const carMeshes = new Map(); // id -> THREE.Group
-const playerCar = createCarModel(0xff4500); // oyuncu arabası rengi
+const carMeshes = new Map();
+const playerCar = createCarModel(0xff4500);
 scene.add(playerCar);
 
 // ========== İstemci Durumu ve Ağ ==========
-let gameMode = null; // 'single' veya 'multiplayer'
+let gameMode = null;
 let localGame = null;
 let networkGame = null;
 let socket = null;
 
-// Input durumu
 const keys = { up: false, down: false, left: false, right: false };
 
-// Klavye olayları
+// Klavye
 window.addEventListener('keydown', (e) => {
     switch (e.key) {
         case 'ArrowUp': case 'w': case 'W': keys.up = true; e.preventDefault(); break;
@@ -267,14 +306,14 @@ window.addEventListener('keyup', (e) => {
     if (networkGame) networkGame.sendInput();
 });
 
-// Mobil dokunmatik kontroller
+// Mobil dokunmatik
 function setupTouchControls() {
     const steerLeft = document.getElementById('steerLeft');
     const steerRight = document.getElementById('steerRight');
     const gasBtn = document.getElementById('gasBtn');
     const brakeBtn = document.getElementById('brakeBtn');
 
-    function setInput(btn, key, value) {
+    function setInput(btn, key) {
         btn.addEventListener('touchstart', (e) => {
             e.preventDefault();
             keys[key] = true;
@@ -290,16 +329,15 @@ function setupTouchControls() {
             if (networkGame) networkGame.sendInput();
         });
     }
-    setInput(steerLeft, 'left', true);
-    setInput(steerRight, 'right', true);
-    setInput(gasBtn, 'up', true);
-    setInput(brakeBtn, 'down', true);
+    setInput(steerLeft, 'left');
+    setInput(steerRight, 'right');
+    setInput(gasBtn, 'up');
+    setInput(brakeBtn, 'down');
 }
 setupTouchControls();
 
-// ========== Kamera Takip ==========
+// Kamera takip
 function updateCamera(targetPosition, targetAngle) {
-    // Arabanın arkasında ve biraz yukarıda
     const distance = 8;
     const height = 4;
     const backX = targetPosition.x - Math.sin(targetAngle) * distance;
@@ -308,7 +346,7 @@ function updateCamera(targetPosition, targetAngle) {
     camera.lookAt(targetPosition.x, targetPosition.y + 0.5, targetPosition.z);
 }
 
-// ========== Yerel Tek Oyuncu Modu (Botlarla) ==========
+// ========== Yerel Tek Oyuncu (Botlarla) ==========
 class Car {
     constructor(x, z, angle, color) {
         this.x = x;
@@ -334,11 +372,11 @@ class Car {
         if (this.speed < -11) this.speed = -11;
         this.x += Math.sin(this.angle) * this.speed * dt;
         this.z += Math.cos(this.angle) * this.speed * dt;
-        // Pist dışı kontrolü (basit)
-        const cx = this.x, cz = this.z;
+
+        // Pist dışı kontrolü
         let minDist = Infinity;
         for (const wp of WAYPOINTS) {
-            const d = Math.hypot(wp.x - cx, wp.z - cz);
+            const d = Math.hypot(wp.x - this.x, wp.z - this.z);
             if (d < minDist) minDist = d;
         }
         if (minDist > TRACK_HALF + 1.5) {
@@ -405,8 +443,6 @@ class LocalRace {
 
     update() {
         const now = performance.now();
-        const dt = Math.min(0.05, (now - this.lastTime) / 1000);
-        this.lastTime = now;
         if (this.state === 'countdown') {
             const elapsed = (now - this.countdownStart) / 1000;
             const newCount = 3 - Math.floor(elapsed);
@@ -416,15 +452,21 @@ class LocalRace {
             }
             if (elapsed >= 3) {
                 this.state = 'racing';
+                this.lastTime = performance.now(); // İlk frame sıçramasını önle
                 document.getElementById('countdownDisplay').classList.add('hidden');
                 sound.startEngine();
             }
             return;
         }
+
+        const dt = Math.min(0.05, (now - this.lastTime) / 1000);
+        this.lastTime = now;
+
         if (this.state === 'racing') {
             this.player.update(dt, keys);
             sound.updateEngine(this.player.speed, 22);
             for (const bot of this.bots) bot.ai.update(dt);
+
             if (this.player.finished && !this.finished) {
                 this.finished = true;
                 this.state = 'finished';
@@ -434,15 +476,14 @@ class LocalRace {
                 document.getElementById('messageBox').classList.remove('hidden');
             }
         }
+
         document.getElementById('lapCounter').textContent = `Tur: ${this.player.lap}/3`;
         document.getElementById('speedometer').textContent = `${Math.abs(this.player.speed * 3.6).toFixed(0)} km/h`;
     }
 
     render() {
-        // Oyuncu arabasını güncelle
         playerCar.position.set(this.player.x, 0.3, this.player.z);
         playerCar.rotation.y = this.player.angle;
-        // Bot arabalarını yönet
         for (let i = 0; i < this.bots.length; i++) {
             const bot = this.bots[i].car;
             if (!carMeshes.has(`bot_${i}`)) {
@@ -458,7 +499,7 @@ class LocalRace {
     }
 }
 
-// ========== Çok Oyunculu Ağ Yönetimi (İstemci Tahmini & Interpolasyon) ==========
+// ========== Çok Oyunculu Ağ (İstemci Tahmini & Interpolasyon) ==========
 class NetworkGame {
     constructor(socket) {
         this.socket = socket;
@@ -466,11 +507,10 @@ class NetworkGame {
         this.serverState = null;
         this.lastServerUpdate = 0;
         this.myId = socket.id;
-        this.entities = new Map(); // id -> { mesh, target, current, lastUpdateTime }
+        this.entities = new Map();
         this.playerEntity = null;
         this.predictedPosition = { x: 0, z: 0, angle: 0, speed: 0 };
         this.serverPosition = { x: 0, z: 0, angle: 0, speed: 0 };
-        this.lastInputSent = 0;
 
         this.socket.on('room-created', (data) => {
             document.getElementById('roomInfo').classList.remove('hidden');
@@ -500,24 +540,20 @@ class NetworkGame {
             this.state = 'racing';
             document.getElementById('countdownDisplay').classList.add('hidden');
             sound.startEngine();
-            // Oyuncu arabasını sıfırla
             playerCar.position.set(0, 0.3, 11);
             playerCar.rotation.y = 0;
         });
         this.socket.on('game-state', (state) => {
             this.serverState = state;
             this.lastServerUpdate = performance.now();
-            // Sunucudan gelen oyuncu pozisyonunu kaydet (düzeltme için)
             const me = state.players.find(p => p.id === this.myId);
             if (me) {
                 this.serverPosition = { x: me.x, z: me.z, angle: me.angle, speed: me.speed };
-                // Tahmin hatasını düzelt (sert düzeltme yerine yumuşak geçiş)
                 this.predictedPosition.x += (me.x - this.predictedPosition.x) * 0.3;
                 this.predictedPosition.z += (me.z - this.predictedPosition.z) * 0.3;
                 this.predictedPosition.angle = me.angle;
                 this.predictedPosition.speed = me.speed;
             }
-            // Diğer varlıkları güncelle
             state.players.forEach(p => {
                 if (p.id === this.myId) return;
                 if (!this.entities.has(p.id)) {
@@ -570,43 +606,43 @@ class NetworkGame {
 
     update(dt) {
         if (this.state !== 'racing') return;
-        // İstemci tarafı tahmin (client prediction)
-        if (this.predictedPosition) {
-            // Yerel fizik simülasyonu (sunucuyla aynı mantık)
-            const input = keys;
-            let angle = this.predictedPosition.angle;
-            let speed = this.predictedPosition.speed;
-            if (input.left) angle -= 2.8 * dt;
-            if (input.right) angle += 2.8 * dt;
-            if (input.up) speed += 12 * dt;
-            else if (input.down) speed -= 18 * dt;
-            else speed *= 0.96;
-            if (speed > 22) speed = 22;
-            if (speed < -11) speed = -11;
-            this.predictedPosition.x += Math.sin(angle) * speed * dt;
-            this.predictedPosition.z += Math.cos(angle) * speed * dt;
-            this.predictedPosition.angle = angle;
-            this.predictedPosition.speed = speed;
-            // Oyuncu arabasını tahmini pozisyona yerleştir
-            playerCar.position.set(this.predictedPosition.x, 0.3, this.predictedPosition.z);
-            playerCar.rotation.y = this.predictedPosition.angle;
-            updateCamera(playerCar.position, this.predictedPosition.angle);
-            sound.updateEngine(speed, 22);
-        }
+        // İstemci tahmini
+        let angle = this.predictedPosition.angle;
+        let speed = this.predictedPosition.speed;
+        if (keys.left) angle -= 2.8 * dt;
+        if (keys.right) angle += 2.8 * dt;
+        if (keys.up) speed += 12 * dt;
+        else if (keys.down) speed -= 18 * dt;
+        else speed *= 0.96;
+        if (speed > 22) speed = 22;
+        if (speed < -11) speed = -11;
+        this.predictedPosition.x += Math.sin(angle) * speed * dt;
+        this.predictedPosition.z += Math.cos(angle) * speed * dt;
+        this.predictedPosition.angle = angle;
+        this.predictedPosition.speed = speed;
+
+        playerCar.position.set(this.predictedPosition.x, 0.3, this.predictedPosition.z);
+        playerCar.rotation.y = this.predictedPosition.angle;
+        updateCamera(playerCar.position, this.predictedPosition.angle);
+        sound.updateEngine(speed, 22);
+
         // Diğer varlıkların interpolasyonu
         const now = performance.now();
         for (const [id, entity] of this.entities) {
-            const t = Math.min((now - entity.lastUpdate) / 50, 1); // 50ms broadcast aralığına göre
+            const t = Math.min((now - entity.lastUpdate) / 50, 1);
             entity.current.x += (entity.target.x - entity.current.x) * t;
             entity.current.z += (entity.target.z - entity.current.z) * t;
             entity.current.angle += (entity.target.angle - entity.current.angle) * t;
             entity.mesh.position.set(entity.current.x, 0.3, entity.current.z);
             entity.mesh.rotation.y = entity.current.angle;
         }
-        // HUD güncelle
-        if (this.serverPosition) {
-            document.getElementById('lapCounter').textContent = `Tur: ${this.serverState?.players.find(p => p.id === this.myId)?.lap || 0}/3`;
-            document.getElementById('speedometer').textContent = `${Math.abs(this.serverPosition.speed * 3.6).toFixed(0)} km/h`;
+
+        if (this.serverState) {
+            const me = this.serverState.players.find(p => p.id === this.myId);
+            if (me) {
+                document.getElementById('lapCounter').textContent = `Tur: ${me.lap}/3`;
+                document.getElementById('speedometer').textContent = `${Math.abs(me.speed * 3.6).toFixed(0)} km/h`;
+            }
         }
     }
 }
@@ -673,9 +709,8 @@ function connectAndJoinRoom(roomId, name) {
     animateLoop();
 }
 
-// ========== Ana Animasyon Döngüsü ==========
+// Ana döngü
 let lastFrameTime = performance.now();
-
 function animateLoop() {
     requestAnimationFrame(animateLoop);
     const now = performance.now();
@@ -691,7 +726,6 @@ function animateLoop() {
     renderer.render(scene, camera);
 }
 
-// Pencere boyutlandırma
 window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
