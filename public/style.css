@@ -2,25 +2,31 @@
     margin: 0;
     padding: 0;
     box-sizing: border-box;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: manipulation;
 }
 
 body {
-    background: #1a1a2e;
+    background: #0a0a1a;
+    font-family: 'Segoe UI', sans-serif;
+    overflow: hidden;
+    height: 100vh;
+    width: 100vw;
     display: flex;
     justify-content: center;
     align-items: center;
-    height: 100vh;
-    font-family: 'Segoe UI', sans-serif;
-    overflow: hidden;
 }
 
 #menu {
     text-align: center;
     color: #eee;
+    max-width: 400px;
+    width: 90%;
 }
 
 #menu h1 {
-    font-size: 3rem;
+    font-size: 2.5rem;
     margin-bottom: 20px;
     color: #f0a500;
     text-shadow: 2px 2px 0 #000;
@@ -28,56 +34,65 @@ body {
 
 button {
     display: block;
-    margin: 10px auto;
-    padding: 12px 30px;
-    font-size: 1.2rem;
+    width: 100%;
+    margin: 10px 0;
+    padding: 14px 20px;
+    font-size: 1.1rem;
     border: none;
-    border-radius: 8px;
-    background: #16213e;
+    border-radius: 10px;
+    background: #1e2a4a;
     color: #e0e0e0;
     cursor: pointer;
     transition: background 0.2s;
 }
 
 button:hover {
-    background: #0f3460;
-}
-
-#multiplayerPanel {
-    margin-top: 20px;
+    background: #2a3f6e;
 }
 
 input {
-    padding: 8px;
-    margin: 5px;
-    border-radius: 5px;
-    border: 1px solid #ccc;
+    display: block;
+    width: 100%;
+    padding: 12px;
+    margin: 8px 0;
+    border-radius: 8px;
+    border: 1px solid #444;
+    background: #111;
+    color: white;
     font-size: 1rem;
+    text-align: center;
 }
 
 .hidden {
     display: none !important;
 }
 
-#gameUI {
-    position: relative;
+.separator {
+    margin: 15px 0;
+    color: #888;
 }
 
-#gameCanvas {
-    background: #2d5a27;
+#gameUI {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+}
+
+canvas {
     display: block;
-    border: 3px solid #555;
-    border-radius: 10px;
+    width: 100%;
+    height: 100%;
 }
 
 #hud {
     position: absolute;
-    top: 10px;
-    left: 10px;
+    top: 15px;
+    left: 15px;
     color: white;
     font-weight: bold;
-    text-shadow: 1px 1px 2px black;
-    font-size: 1.3rem;
+    font-size: 1.2rem;
+    text-shadow: 1px 1px 3px black;
+    z-index: 10;
 }
 
 #countdownDisplay {
@@ -85,9 +100,10 @@ input {
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    font-size: 6rem;
+    font-size: 5rem;
     color: #f0a500;
     text-shadow: 4px 4px 0 #000;
+    z-index: 20;
 }
 
 #messageBox {
@@ -95,9 +111,47 @@ input {
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    font-size: 2.5rem;
-    background: rgba(0,0,0,0.7);
+    font-size: 2rem;
+    background: rgba(0,0,0,0.8);
     padding: 20px 40px;
     border-radius: 15px;
     color: white;
+    z-index: 30;
+}
+
+/* Mobil Dokunmatik Kontroller */
+#touchControls {
+    position: absolute;
+    bottom: 30px;
+    left: 0;
+    right: 0;
+    display: flex;
+    justify-content: space-between;
+    padding: 0 20px;
+    z-index: 15;
+}
+
+.touch-btn {
+    width: 70px;
+    height: 70px;
+    background: rgba(255,255,255,0.2);
+    border: 2px solid rgba(255,255,255,0.4);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2rem;
+    color: white;
+    pointer-events: auto;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.gas {
+    background: rgba(0,200,0,0.3);
+    border-color: rgba(0,255,0,0.6);
+}
+
+.brake {
+    background: rgba(200,0,0,0.3);
+    border-color: rgba(255,0,0,0.6);
 }
