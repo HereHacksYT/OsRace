@@ -1,10 +1,90 @@
 import * as THREE from 'three';
 
-// Ses sistemi aynı
-class SoundManager { /* ... sound sınıfı aynen korunacak ... */ }
+// ========== Ses Yöneticisi ==========
+class SoundManager {
+    constructor() {
+        this.ctx = null;
+        this.initialized = false;
+        this.engineOsc = null;
+        this.engineGain = null;
+    }
+
+    init() {
+        if (this.initialized) return;
+        this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+        this.initialized = true;
+    }
+
+    startEngine() {
+        if (!this.ctx || this.engineOsc) return;
+        this.engineOsc = this.ctx.createOscillator();
+        this.engineGain = this.ctx.createGain();
+        this.engineOsc.type = 'sawtooth';
+        this.engineOsc.frequency.value = 60;
+        this.engineGain.gain.value = 0.04;
+        this.engineOsc.connect(this.engineGain);
+        this.engineGain.connect(this.ctx.destination);
+        this.engineOsc.start();
+    }
+
+    updateEngine(speed, maxSpeed) {
+        if (!this.engineOsc) return;
+        const freq = 50 + (Math.abs(speed) / maxSpeed) * 180;
+        this.engineOsc.frequency.setTargetAtTime(freq, this.ctx.currentTime, 0.1);
+        const gain = 0.02 + (Math.abs(speed) / maxSpeed) * 0.06;
+        this.engineGain.gain.setTargetAtTime(gain, this.ctx.currentTime, 0.1);
+    }
+
+    stopEngine() {
+        if (this.engineOsc) {
+            this.engineOsc.stop();
+            this.engineOsc.disconnect();
+            this.engineOsc = null;
+            this.engineGain = null;
+        }
+    }
+
+    playBeep(freq = 440, duration = 0.15) {
+        if (!this.ctx) return;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'square';
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0.2, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + duration);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start();
+        osc.stop(this.ctx.currentTime + duration);
+    }
+
+    playCrash() {
+        if (!this.ctx) return;
+        const bufferSize = this.ctx.sampleRate * 0.25;
+        const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+            data[i] = (Math.random() * 2 - 1) * (1 - i / bufferSize);
+        }
+        const source = this.ctx.createBufferSource();
+        source.buffer = buffer;
+        const gain = this.ctx.createGain();
+        gain.gain.value = 0.15;
+        source.connect(gain);
+        gain.connect(this.ctx.destination);
+        source.start();
+    }
+
+    playFinish() {
+        this.playBeep(660, 0.1);
+        setTimeout(() => this.playBeep(880, 0.15), 100);
+        setTimeout(() => this.playBeep(1100, 0.2), 200);
+    }
+}
+
 const sound = new SoundManager();
 
-// Yeni pist noktaları (sunucu ile aynı)
+// ========== Pist Noktaları ==========
 const WAYPOINTS = [
     { x: 0, z: 20 }, { x: 30, z: 15 }, { x: 60, z: 5 },
     { x: 80, z: -15 }, { x: 70, z: -45 }, { x: 40, z: -60 },
@@ -15,11 +95,11 @@ const WAYPOINTS = [
 const TRACK_WIDTH = 14;
 const TRACK_HALF = TRACK_WIDTH / 2;
 
-// Three.js sahne
+// ========== Three.js Sahnesi ==========
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87CEEB);
 scene.fog = new THREE.Fog(0x87CEEB, 100, 250);
-const camera = new THREE.PerspectiveCamera(60, innerWidth/innerHeight, 1, 300);
+const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 1, 300);
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(innerWidth, innerHeight);
 renderer.shadowMap.enabled = true;
@@ -30,7 +110,7 @@ scene.add(new THREE.AmbientLight(0x404066));
 const dirLight = new THREE.DirectionalLight(0xffffff, 0.9);
 dirLight.position.set(50, 80, 30);
 dirLight.castShadow = true;
-dirLight.shadow.mapSize.set(2048,2048);
+dirLight.shadow.mapSize.set(2048, 2048);
 dirLight.shadow.camera.near = 1; dirLight.shadow.camera.far = 300;
 dirLight.shadow.camera.left = -100; dirLight.shadow.camera.right = 100;
 dirLight.shadow.camera.top = 100; dirLight.shadow.camera.bottom = -100;
@@ -41,22 +121,20 @@ const ground = new THREE.Mesh(
     new THREE.PlaneGeometry(300, 300),
     new THREE.MeshStandardMaterial({ color: 0x555555, roughness: 0.9 })
 );
-ground.rotation.x = -Math.PI/2;
+ground.rotation.x = -Math.PI / 2;
 ground.receiveShadow = true;
 scene.add(ground);
 
-// --- DÜZ YOL (Tünel yok!) ---
+// Düz yol (tünel yok)
 function createFlatTrack() {
     const trackGroup = new THREE.Group();
     const points = WAYPOINTS.map(wp => new THREE.Vector3(wp.x, 0.01, wp.z));
     const curve = new THREE.CatmullRomCurve3(points, true);
     const divisions = 300;
     const roadPoints = curve.getPoints(divisions);
-    
-    // Yol yüzeyi için düz ribbon
+
     const vertices = [];
     const indices = [];
-    const uvs = [];
     for (let i = 0; i <= divisions; i++) {
         const pt = roadPoints[i];
         const tangent = curve.getTangent(i / divisions).normalize();
@@ -65,23 +143,21 @@ function createFlatTrack() {
         const right = pt.clone().addScaledVector(perp, -TRACK_HALF);
         vertices.push(left.x, left.y, left.z);
         vertices.push(right.x, right.y, right.z);
-        uvs.push(0, i/divisions, 1, i/divisions);
     }
     for (let i = 0; i < divisions; i++) {
-        const a = i*2, b = i*2+1, c = (i+1)*2, d = (i+1)*2+1;
+        const a = i * 2, b = i * 2 + 1, c = (i + 1) * 2, d = (i + 1) * 2 + 1;
         indices.push(a, b, c);
         indices.push(b, d, c);
     }
     const roadGeom = new THREE.BufferGeometry();
     roadGeom.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
     roadGeom.setIndex(indices);
-    roadGeom.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
     roadGeom.computeVertexNormals();
     const roadMesh = new THREE.Mesh(roadGeom, new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.7 }));
     roadMesh.receiveShadow = true;
     trackGroup.add(roadMesh);
 
-    // Kenar çizgileri (beyaz)
+    // Kenar çizgileri
     for (let i = 0; i < divisions; i += 5) {
         const pt = roadPoints[i];
         const tangent = curve.getTangent(i / divisions).normalize();
@@ -94,13 +170,13 @@ function createFlatTrack() {
         leftLine.position.copy(leftPos); leftLine.position.y = 0.02;
         leftLine.rotation.y = Math.atan2(tangent.x, tangent.z);
         trackGroup.add(leftLine);
-        const rightLine = rightLine.clone();
+        const rightLine = new THREE.Mesh(lineGeom, lineMat);
         rightLine.position.copy(rightPos); rightLine.position.y = 0.02;
         rightLine.rotation.y = Math.atan2(tangent.x, tangent.z);
         trackGroup.add(rightLine);
     }
 
-    // Alçak bariyerler (kırmızı-beyaz)
+    // Alçak bariyerler
     const barrierMat = new THREE.MeshStandardMaterial({ color: 0xff4444, roughness: 0.6 });
     for (let i = 0; i < divisions; i += 3) {
         const pt = roadPoints[i];
@@ -127,48 +203,49 @@ function createFlatTrack() {
         new THREE.MeshStandardMaterial({ color: 0xffaa00, side: THREE.DoubleSide })
     );
     finishLine.position.set(0, 0.03, 20);
-    finishLine.rotation.x = -Math.PI/2;
+    finishLine.rotation.x = -Math.PI / 2;
     trackGroup.add(finishLine);
 
     scene.add(trackGroup);
 }
 createFlatTrack();
 
-// Ağaçlar (büyük alana yay)
+// Ağaçlar
 for (let i = 0; i < 60; i++) {
     const tree = new THREE.Group();
-    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.4,0.5,3), new THREE.MeshStandardMaterial({ color: 0x8B4513 }));
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.5, 3), new THREE.MeshStandardMaterial({ color: 0x8B4513 }));
     trunk.position.y = 1.5; trunk.castShadow = trunk.receiveShadow = true;
     tree.add(trunk);
-    const foliage = new THREE.Mesh(new THREE.ConeGeometry(1.2,3,8), new THREE.MeshStandardMaterial({ color: 0x228B22 }));
+    const foliage = new THREE.Mesh(new THREE.ConeGeometry(1.2, 3, 8), new THREE.MeshStandardMaterial({ color: 0x228B22 }));
     foliage.position.y = 3.5; foliage.castShadow = foliage.receiveShadow = true;
     tree.add(foliage);
-    const angle = Math.random()*Math.PI*2;
-    const r = 30 + Math.random()*60;
-    tree.position.set(Math.cos(angle)*r, 0, Math.sin(angle)*r);
+    const angle = Math.random() * Math.PI * 2;
+    const r = 30 + Math.random() * 60;
+    tree.position.set(Math.cos(angle) * r, 0, Math.sin(angle) * r);
     scene.add(tree);
 }
 
-// Araba modeli (biraz daha alçak)
+// Araba modeli
 function createCarModel(color) {
     const car = new THREE.Group();
-    const body = new THREE.Mesh(new THREE.BoxGeometry(1.8,0.6,3.6), new THREE.MeshStandardMaterial({ color }));
+    const body = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.6, 3.6), new THREE.MeshStandardMaterial({ color }));
     body.position.y = 0.5; body.castShadow = body.receiveShadow = true;
     car.add(body);
-    const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.4,0.4,1.8), new THREE.MeshStandardMaterial({ color: 0x333333 }));
-    cabin.position.set(0,0.95,-0.3); cabin.castShadow = true;
+    const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.4, 1.8), new THREE.MeshStandardMaterial({ color: 0x333333 }));
+    cabin.position.set(0, 0.95, -0.3); cabin.castShadow = true;
     car.add(cabin);
-    const wheelGeom = new THREE.CylinderGeometry(0.45,0.45,0.5,16);
+    const wheelGeom = new THREE.CylinderGeometry(0.45, 0.45, 0.5, 16);
     const wheelMat = new THREE.MeshStandardMaterial({ color: 0x111111 });
-    [[-1,0.4,1.4],[1,0.4,1.4],[-1,0.4,-1.4],[1,0.4,-1.4]].forEach(pos => {
+    [[-1, 0.4, 1.4], [1, 0.4, 1.4], [-1, 0.4, -1.4], [1, 0.4, -1.4]].forEach(pos => {
         const wheel = new THREE.Mesh(wheelGeom, wheelMat);
-        wheel.rotation.z = Math.PI/2;
+        wheel.rotation.z = Math.PI / 2;
         wheel.position.set(pos[0], pos[1], pos[2]);
         wheel.castShadow = wheel.receiveShadow = true;
         car.add(wheel);
     });
     return car;
 }
+
 const playerCar = createCarModel(0xff4500);
 scene.add(playerCar);
 const carMeshes = new Map();
@@ -177,58 +254,116 @@ const carMeshes = new Map();
 function updateCamera(pos, angle) {
     const dist = 10, h = 5;
     camera.position.lerp(new THREE.Vector3(
-        pos.x - Math.sin(angle)*dist, pos.y + h, pos.z - Math.cos(angle)*dist
+        pos.x - Math.sin(angle) * dist, pos.y + h, pos.z - Math.cos(angle) * dist
     ), 0.08);
-    camera.lookAt(pos.x, pos.y+0.5, pos.z);
+    camera.lookAt(pos.x, pos.y + 0.5, pos.z);
 }
 
-// Kontroller (klavye + dokunmatik)
-const keys = { up:false, down:false, left:false, right:false };
-// ... klavye eventleri aynı ...
-// Mobil dokunmatik aynı ...
+// ========== KONTROLLER ==========
+const keys = { up: false, down: false, left: false, right: false };
 
-let gameMode, networkGame, socket;
+// Klavye
+window.addEventListener('keydown', (e) => {
+    switch (e.key) {
+        case 'ArrowUp': case 'w': case 'W': keys.up = true; e.preventDefault(); break;
+        case 'ArrowDown': case 's': case 'S': keys.down = true; e.preventDefault(); break;
+        case 'ArrowLeft': case 'a': case 'A': keys.left = true; e.preventDefault(); break;
+        case 'ArrowRight': case 'd': case 'D': keys.right = true; e.preventDefault(); break;
+    }
+    if (networkGame) networkGame.sendInput();
+});
+
+window.addEventListener('keyup', (e) => {
+    switch (e.key) {
+        case 'ArrowUp': case 'w': case 'W': keys.up = false; e.preventDefault(); break;
+        case 'ArrowDown': case 's': case 'S': keys.down = false; e.preventDefault(); break;
+        case 'ArrowLeft': case 'a': case 'A': keys.left = false; e.preventDefault(); break;
+        case 'ArrowRight': case 'd': case 'D': keys.right = false; e.preventDefault(); break;
+    }
+    if (networkGame) networkGame.sendInput();
+});
+
+// Mobil dokunmatik
+function setupTouchControls() {
+    const btnMap = {
+        steerLeft: 'left',
+        steerRight: 'right',
+        gasBtn: 'up',
+        brakeBtn: 'down'
+    };
+    for (const [id, key] of Object.entries(btnMap)) {
+        const el = document.getElementById(id);
+        if (!el) continue;
+        el.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            keys[key] = true;
+            if (networkGame) networkGame.sendInput();
+        });
+        el.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            keys[key] = false;
+            if (networkGame) networkGame.sendInput();
+        });
+        el.addEventListener('touchcancel', (e) => {
+            keys[key] = false;
+            if (networkGame) networkGame.sendInput();
+        });
+    }
+}
+setupTouchControls();
+
+// ========== AĞ YÖNETİMİ ==========
+let gameMode = null;
+let networkGame = null;
+let socket = null;
 
 class NetworkGame {
     constructor(socket) {
         this.socket = socket;
         this.state = 'waiting';
+        this.serverState = null;
         this.myId = socket.id;
         this.entities = new Map();
-        this.predicted = { x:0, z:0, angle:0, speed:0 };
-        this.serverPos = { x:0, z:0, angle:0, speed:0 };
-        socket.on('room-created', data => {
+        this.predicted = { x: 0, z: 0, angle: 0, speed: 0 };
+        this.serverPos = { x: 0, z: 0, angle: 0, speed: 0 };
+
+        this.socket.on('room-created', (data) => {
             document.getElementById('roomInfo').classList.remove('hidden');
             document.getElementById('displayRoomId').textContent = data.roomId;
         });
-        socket.on('joined-room', data => {
+        this.socket.on('joined-room', (data) => {
             document.getElementById('roomInfo').classList.remove('hidden');
             document.getElementById('displayRoomId').textContent = data.roomId;
         });
-        socket.on('player-joined', data => {
+        this.socket.on('player-joined', () => {
             document.getElementById('playerCount').textContent = 'Oyuncu: 2/2';
         });
-        socket.on('player-left', id => {
-            if (this.entities.has(id)) { scene.remove(this.entities.get(id).mesh); this.entities.delete(id); }
+        this.socket.on('player-left', (id) => {
+            if (this.entities.has(id)) {
+                scene.remove(this.entities.get(id).mesh);
+                this.entities.delete(id);
+            }
+            document.getElementById('playerCount').textContent = 'Oyuncu: 1/2';
         });
-        socket.on('countdown', sec => {
+        this.socket.on('countdown', (sec) => {
             this.state = 'countdown';
             const disp = document.getElementById('countdownDisplay');
             disp.classList.remove('hidden');
             disp.textContent = sec > 0 ? sec : 'BAŞLA!';
             sound.playBeep(440, 0.2);
         });
-        socket.on('race-start', () => {
+        this.socket.on('race-start', () => {
             this.state = 'racing';
             document.getElementById('countdownDisplay').classList.add('hidden');
             sound.startEngine();
         });
-        socket.on('game-state', state => {
+        this.socket.on('game-state', (state) => {
+            this.serverState = state;
             const me = state.players.find(p => p.id === this.myId);
             if (me) {
-                this.serverPos = { x:me.x, z:me.z, angle:me.angle, speed:me.speed };
-                this.predicted.x += (me.x - this.predicted.x)*0.3;
-                this.predicted.z += (me.z - this.predicted.z)*0.3;
+                this.serverPos = { x: me.x, z: me.z, angle: me.angle, speed: me.speed };
+                this.predicted.x += (me.x - this.predicted.x) * 0.3;
+                this.predicted.z += (me.z - this.predicted.z) * 0.3;
                 this.predicted.angle = me.angle;
                 this.predicted.speed = me.speed;
             }
@@ -238,13 +373,14 @@ class NetworkGame {
                     const mesh = createCarModel(0x1e90ff);
                     scene.add(mesh);
                     this.entities.set(p.id, {
-                        mesh, target: { x:p.x, z:p.z, angle:p.angle },
-                        current: { x:p.x, z:p.z, angle:p.angle },
+                        mesh,
+                        target: { x: p.x, z: p.z, angle: p.angle },
+                        current: { x: p.x, z: p.z, angle: p.angle },
                         lastUpdate: performance.now()
                     });
                 } else {
                     const e = this.entities.get(p.id);
-                    e.target = { x:p.x, z:p.z, angle:p.angle };
+                    e.target = { x: p.x, z: p.z, angle: p.angle };
                     e.lastUpdate = performance.now();
                 }
             });
@@ -253,76 +389,101 @@ class NetworkGame {
                     const mesh = createCarModel(0x32cd32);
                     scene.add(mesh);
                     this.entities.set(b.id, {
-                        mesh, target: { x:b.x, z:b.z, angle:b.angle },
-                        current: { x:b.x, z:b.z, angle:b.angle },
+                        mesh,
+                        target: { x: b.x, z: b.z, angle: b.angle },
+                        current: { x: b.x, z: b.z, angle: b.angle },
                         lastUpdate: performance.now()
                     });
                 } else {
                     const e = this.entities.get(b.id);
-                    e.target = { x:b.x, z:b.z, angle:b.angle };
+                    e.target = { x: b.x, z: b.z, angle: b.angle };
                     e.lastUpdate = performance.now();
                 }
             });
         });
-        socket.on('race-end', () => {
+        this.socket.on('race-end', () => {
             this.state = 'finished';
             sound.stopEngine();
             sound.playFinish();
             document.getElementById('messageBox').textContent = 'YARIŞ BİTTİ!';
             document.getElementById('messageBox').classList.remove('hidden');
         });
-        socket.on('error', msg => alert(msg));
+        this.socket.on('error', (msg) => alert('Hata: ' + msg));
     }
+
     sendInput() {
-        if (this.socket.connected) this.socket.emit('input', keys);
+        if (this.socket.connected) {
+            this.socket.emit('input', keys);
+        }
     }
+
     update(dt) {
         if (this.state !== 'racing') return;
         let a = this.predicted.angle, s = this.predicted.speed;
-        if (keys.left) a -= 2.8*dt;
-        if (keys.right) a += 2.8*dt;
-        if (keys.up) s += 14*dt;
-        else if (keys.down) s -= 20*dt;
+        if (keys.left) a -= 2.8 * dt;
+        if (keys.right) a += 2.8 * dt;
+        if (keys.up) s += 14 * dt;
+        else if (keys.down) s -= 20 * dt;
         else s *= 0.96;
         if (s > 25) s = 25; if (s < -12) s = -12;
-        this.predicted.x += Math.sin(a)*s*dt;
-        this.predicted.z += Math.cos(a)*s*dt;
-        this.predicted.angle = a; this.predicted.speed = s;
+        this.predicted.x += Math.sin(a) * s * dt;
+        this.predicted.z += Math.cos(a) * s * dt;
+        this.predicted.angle = a;
+        this.predicted.speed = s;
+
         playerCar.position.set(this.predicted.x, 0.1, this.predicted.z);
         playerCar.rotation.y = this.predicted.angle;
         updateCamera(playerCar.position, this.predicted.angle);
         sound.updateEngine(s, 25);
+
         const now = performance.now();
         this.entities.forEach(e => {
-            const t = Math.min((now - e.lastUpdate)/50, 1);
-            e.current.x += (e.target.x - e.current.x)*t;
-            e.current.z += (e.target.z - e.current.z)*t;
-            e.current.angle += (e.target.angle - e.current.angle)*t;
+            const t = Math.min((now - e.lastUpdate) / 50, 1);
+            e.current.x += (e.target.x - e.current.x) * t;
+            e.current.z += (e.target.z - e.current.z) * t;
+            e.current.angle += (e.target.angle - e.current.angle) * t;
             e.mesh.position.set(e.current.x, 0.1, e.current.z);
             e.mesh.rotation.y = e.current.angle;
         });
+
         const me = this.serverState?.players?.find(p => p.id === this.myId);
         if (me) {
             document.getElementById('lapCounter').textContent = `Tur: ${me.lap}/3`;
-            document.getElementById('speedometer').textContent = `${Math.abs(me.speed*3.6).toFixed(0)} km/h`;
+            document.getElementById('speedometer').textContent = `${Math.abs(me.speed * 3.6).toFixed(0)} km/h`;
         }
     }
 }
 
-// Menü butonları
-document.getElementById('singlePlayerBtn').onclick = () => {
+// ========== MENÜ BUTONLARI ==========
+// Buton elementlerini al
+const singlePlayerBtn = document.getElementById('singlePlayerBtn');
+const multiplayerBtn = document.getElementById('multiplayerBtn');
+const multiplayerPanel = document.getElementById('multiplayerPanel');
+const createRoomBtn = document.getElementById('createRoomBtn');
+const joinRoomBtn = document.getElementById('joinRoomBtn');
+const startRaceBtn = document.getElementById('startRaceBtn');
+
+// Botlarla Tek Başına Oyna
+singlePlayerBtn.addEventListener('click', () => {
     sound.init();
     socket = io();
     networkGame = new NetworkGame(socket);
     document.getElementById('menu').classList.add('hidden');
     document.getElementById('gameUI').classList.remove('hidden');
+    document.getElementById('roomInfo').classList.add('hidden');
     if ('ontouchstart' in window) document.getElementById('touchControls').classList.remove('hidden');
     gameMode = 'multiplayer';
     socket.emit('create-room', 'Oyuncu');
     animateLoop();
-};
-document.getElementById('multiplayerBtn').onclick = () => document.getElementById('multiplayerPanel').classList.remove('hidden');
-document.getElementById('createRoomBtn').onclick = () => {
+});
+
+// Çok Oyunculu menüyü aç
+multiplayerBtn.addEventListener('click', () => {
+    multiplayerPanel.classList.remove('hidden');
+});
+
+// Oda Oluştur
+createRoomBtn.addEventListener('click', () => {
     sound.init();
     const name = document.getElementById('playerNameInput').value.trim() || 'Oyuncu 1';
     socket = io();
@@ -333,36 +494,45 @@ document.getElementById('createRoomBtn').onclick = () => {
     gameMode = 'multiplayer';
     socket.emit('create-room', name);
     animateLoop();
-};
-document.getElementById('joinRoomBtn').onclick = () => {
+});
+
+// Odaya Katıl
+joinRoomBtn.addEventListener('click', () => {
     sound.init();
     const name = document.getElementById('playerNameInput').value.trim() || 'Oyuncu 2';
     const roomId = document.getElementById('roomIdInput').value.trim();
-    if (!roomId) return alert('Oda ID girin');
+    if (!roomId) return alert('Oda ID girin!');
     socket = io();
     networkGame = new NetworkGame(socket);
     document.getElementById('menu').classList.add('hidden');
     document.getElementById('gameUI').classList.remove('hidden');
+    document.getElementById('roomInfo').classList.add('hidden');
     if ('ontouchstart' in window) document.getElementById('touchControls').classList.remove('hidden');
     gameMode = 'multiplayer';
     socket.emit('join-room', { roomId, playerName: name });
     animateLoop();
-};
-document.getElementById('startRaceBtn').onclick = () => {
-    if (networkGame) networkGame.socket.emit('start-race');
-};
+});
 
+// Yarışı Başlat (manuel)
+startRaceBtn.addEventListener('click', () => {
+    if (networkGame && networkGame.socket) {
+        networkGame.socket.emit('start-race');
+    }
+});
+
+// Ana döngü
 let lastFrame = performance.now();
 function animateLoop() {
     requestAnimationFrame(animateLoop);
     const now = performance.now();
-    const dt = Math.min(0.05, (now - lastFrame)/1000);
+    const dt = Math.min(0.05, (now - lastFrame) / 1000);
     lastFrame = now;
     if (networkGame) networkGame.update(dt);
     renderer.render(scene, camera);
 }
-window.onresize = () => {
-    camera.aspect = innerWidth/innerHeight;
+
+window.addEventListener('resize', () => {
+    camera.aspect = innerWidth / innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(innerWidth, innerHeight);
-};
+});
