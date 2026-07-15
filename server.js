@@ -12,50 +12,49 @@ app.use(express.static(path.join(__dirname, 'public')));
 // --- Sabitler ---
 const MAX_PLAYERS = 4;
 const MAX_LAPS = 3;
-const TICK_RATE = 1000 / 60; // 60 FPS sunucu tick
-const BROADCAST_RATE = 50;    // 50ms'de bir durum gönder
-const TRACK_WIDTH = 140;
-const CAR_RADIUS = 14;
-const CAR_ACCELERATION = 260;
-const CAR_BRAKE = 350;
+const TICK_RATE = 1000 / 60; // 60 Hz sunucu simülasyonu
+const BROADCAST_RATE = 1000 / 20; // 20 Hz durum gönderimi (istemci interpolasyon yapacak)
+const CAR_RADIUS = 0.8;
+const CAR_ACCELERATION = 12;
+const CAR_BRAKE = 18;
 const CAR_FRICTION = 0.96;
-const CAR_MAX_SPEED = 320;
-const CAR_STEER_SPEED = 3.5;
-const BOT_ACCELERATION = 240;
-const BOT_STEER_SPEED = 3.0;
-const WAYPOINT_RADIUS = 45;
+const CAR_MAX_SPEED = 22;
+const CAR_STEER_SPEED = 2.8;
+const BOT_STEER_SPEED = 2.4;
+const WAYPOINT_RADIUS = 3.5;
+const TRACK_WIDTH = 8;
+const TRACK_HALF = TRACK_WIDTH / 2;
 
-// Pist noktaları (oval şeklinde)
+// 3D pist noktaları (oval, ZX düzleminde)
 const WAYPOINTS = [
-    { x: 300, y: 150 },
-    { x: 550, y: 100 },
-    { x: 750, y: 150 },
-    { x: 800, y: 350 },
-    { x: 800, y: 550 },
-    { x: 700, y: 700 },
-    { x: 450, y: 750 },
-    { x: 250, y: 700 },
-    { x: 200, y: 550 },
-    { x: 200, y: 350 },
+    { x: 0, z: 10 },
+    { x: 15, z: 8 },
+    { x: 25, z: 0 },
+    { x: 20, z: -15 },
+    { x: 5, z: -22 },
+    { x: -10, z: -18 },
+    { x: -20, z: -5 },
+    { x: -15, z: 10 },
+    { x: -5, z: 18 }
 ];
 
-// Başlangıç pozisyonları (ilk waypoint etrafında sıralı)
+// Başlangıç pozisyonları (ilk waypoint yakınında)
 const START_POSITIONS = [
-    { x: 300, y: 160 },
-    { x: 320, y: 185 },
-    { x: 340, y: 210 },
-    { x: 360, y: 235 }
+    { x: 0, z: 11 },
+    { x: 1.5, z: 12 },
+    { x: 3, z: 13 },
+    { x: -1.5, z: 12 }
 ];
 
-// Bitiş çizgisi segmenti
+// Bitiş çizgisi (iki nokta arası segment)
 const FINISH_LINE = {
-    p1: { x: WAYPOINTS[0].x - 30, y: WAYPOINTS[0].y - 40 },
-    p2: { x: WAYPOINTS[0].x + 30, y: WAYPOINTS[0].y + 40 }
+    p1: { x: -3, z: 10.5 },
+    p2: { x: 3, z: 10.5 }
 };
 
 // --- Yardımcı Fonksiyonlar ---
 function distance(a, b) {
-    return Math.hypot(a.x - b.x, a.y - b.y);
+    return Math.hypot(a.x - b.x, a.z - b.z);
 }
 
 function normalizeAngle(angle) {
@@ -68,12 +67,22 @@ function angleDifference(a, b) {
     return normalizeAngle(b - a);
 }
 
-// İki segmentin kesişip kesişmediğini kontrol et (bitiş çizgisi geçişi için)
+// İki segmentin kesişip kesişmediğini kontrol (bitiş çizgisi geçişi)
 function segmentsIntersect(p1, p2, p3, p4) {
     function ccw(a, b, c) {
-        return (c.y - a.y) * (b.x - a.x) > (b.y - a.y) * (c.x - a.x);
+        return (c.z - a.z) * (b.x - a.x) > (b.z - a.z) * (c.x - a.x);
     }
     return (ccw(p1, p3, p4) !== ccw(p2, p3, p4)) && (ccw(p1, p2, p3) !== ccw(p1, p2, p4));
+}
+
+// Pist dışına çıkma kontrolü (pist merkezine uzaklığa göre basit)
+function isOffTrack(carX, carZ) {
+    let minDist = Infinity;
+    for (const wp of WAYPOINTS) {
+        const d = distance({ x: carX, z: carZ }, wp);
+        if (d < minDist) minDist = d;
+    }
+    return minDist > TRACK_HALF + 1.5;
 }
 
 // Odaları tutacak Map
@@ -83,14 +92,15 @@ const rooms = new Map();
 function createRoom(roomId) {
     const room = {
         id: roomId,
-        players: new Map(),       // socket.id -> player objesi
+        players: new Map(),
         bots: [],
-        status: 'waiting',        // waiting, countdown, racing, finished
+        status: 'waiting', // waiting, countdown, racing, finished
         countdown: 0,
         raceInterval: null,
         broadcastInterval: null,
         maxLaps: MAX_LAPS,
         startTime: 0,
+        prevPositions: new Map()
     };
     rooms.set(roomId, room);
     return room;
@@ -117,8 +127,8 @@ function addPlayer(room, socket, playerName) {
         id: socket.id,
         name: playerName || 'Oyuncu',
         x: pos.x,
-        y: pos.y,
-        angle: Math.atan2(WAYPOINTS[1].y - WAYPOINTS[0].y, WAYPOINTS[1].x - WAYPOINTS[0].x),
+        z: pos.z,
+        angle: Math.atan2(WAYPOINTS[1].x - WAYPOINTS[0].x, WAYPOINTS[1].z - WAYPOINTS[0].z), // yön ZX düzleminde
         speed: 0,
         lap: 0,
         checkpoint: 0,
@@ -134,7 +144,6 @@ function addPlayer(room, socket, playerName) {
 
 function removePlayer(room, socketId) {
     room.players.delete(socketId);
-    // Oyuncu slotuna bot eklenebilir ama basitlik için boş bırakalım
 }
 
 // --- Bot AI ---
@@ -142,9 +151,9 @@ function createBot(index, room) {
     const pos = START_POSITIONS[(room.players.size + index) % START_POSITIONS.length];
     const bot = {
         id: `bot_${index}`,
-        x: pos.x + (index * 15),
-        y: pos.y,
-        angle: Math.atan2(WAYPOINTS[1].y - WAYPOINTS[0].y, WAYPOINTS[1].x - WAYPOINTS[0].x),
+        x: pos.x + (index * 0.8),
+        z: pos.z,
+        angle: Math.atan2(WAYPOINTS[1].x - WAYPOINTS[0].x, WAYPOINTS[1].z - WAYPOINTS[0].z),
         speed: 0,
         lap: 0,
         checkpoint: 0,
@@ -164,13 +173,13 @@ function fillBots(room) {
     }
 }
 
-// --- Fizik Güncelleme (hem oyuncu hem bot için kullanılır) ---
+// --- Yetkili Fizik Güncelleme (Sunucu) ---
 function updateCarPhysics(car, input, dt) {
-    // direksiyon
+    // Direksiyon
     if (input.left) car.angle -= CAR_STEER_SPEED * dt;
     if (input.right) car.angle += CAR_STEER_SPEED * dt;
 
-    // ivmelenme / fren
+    // Gaz / Fren
     if (input.up) {
         car.speed += CAR_ACCELERATION * dt;
     } else if (input.down) {
@@ -179,45 +188,55 @@ function updateCarPhysics(car, input, dt) {
         car.speed *= CAR_FRICTION;
     }
 
-    // maksimum hız sınırı
+    // Hız sınırı
     if (car.speed > CAR_MAX_SPEED) car.speed = CAR_MAX_SPEED;
     if (car.speed < -CAR_MAX_SPEED / 2) car.speed = -CAR_MAX_SPEED / 2;
 
-    // pozisyon güncelle
-    car.x += Math.cos(car.angle) * car.speed * dt;
-    car.y += Math.sin(car.angle) * car.speed * dt;
+    // Pozisyon güncelle (Z ekseni ileri yön)
+    car.x += Math.sin(car.angle) * car.speed * dt;
+    car.z += Math.cos(car.angle) * car.speed * dt;
 
-    // Pist sınırları dışına çıkma kontrolü (basit çarpışma)
-    let nearestDist = Infinity;
-    for (const wp of WAYPOINTS) {
-        const d = distance(car, wp);
-        if (d < nearestDist) nearestDist = d;
+    // Pist dışına çıkma cezası
+    if (isOffTrack(car.x, car.z)) {
+        car.speed *= -0.4; // yavaşla ve geri sek
+        // Basit sınır itme
+        const center = findClosestWaypoint(car.x, car.z);
+        const dx = car.x - center.x;
+        const dz = car.z - center.z;
+        const dist = Math.hypot(dx, dz);
+        if (dist > 0) {
+            car.x -= (dx / dist) * 0.5;
+            car.z -= (dz / dist) * 0.5;
+        }
     }
-    // Merkez çizgisine uzaklık yerine pist genişliği kontrolü (basitleştirilmiş)
-    // Dış sınırları bir dikdörtgen gibi kontrol edelim
-    const minX = 150, maxX = 850, minY = 70, maxY = 780;
-    if (car.x - CAR_RADIUS < minX) { car.x = minX + CAR_RADIUS; car.speed *= -0.3; }
-    if (car.x + CAR_RADIUS > maxX) { car.x = maxX - CAR_RADIUS; car.speed *= -0.3; }
-    if (car.y - CAR_RADIUS < minY) { car.y = minY + CAR_RADIUS; car.speed *= -0.3; }
-    if (car.y + CAR_RADIUS > maxY) { car.y = maxY - CAR_RADIUS; car.speed *= -0.3; }
+}
+
+function findClosestWaypoint(x, z) {
+    let minDist = Infinity;
+    let closest = WAYPOINTS[0];
+    for (const wp of WAYPOINTS) {
+        const d = Math.hypot(wp.x - x, wp.z - z);
+        if (d < minDist) {
+            minDist = d;
+            closest = wp;
+        }
+    }
+    return closest;
 }
 
 // Bot güncelleme (AI)
 function updateBot(bot, dt) {
     if (bot.finished) return;
-    // Bir sonraki waypoint'e git
     const target = WAYPOINTS[bot.waypointIndex];
     const dx = target.x - bot.x;
-    const dy = target.y - bot.y;
-    const dist = Math.hypot(dx, dy);
-    const desiredAngle = Math.atan2(dy, dx);
+    const dz = target.z - bot.z;
+    const dist = Math.hypot(dx, dz);
+    const desiredAngle = Math.atan2(dx, dz);
     let angleDiff = angleDifference(bot.angle, desiredAngle);
 
-    // Waypoint'e yeterince yakınsa bir sonrakine geç
     if (dist < WAYPOINT_RADIUS) {
         bot.waypointIndex = (bot.waypointIndex + 1) % WAYPOINTS.length;
         if (bot.waypointIndex === 0) {
-            // Tur tamamlandı kontrolü (bitiş çizgisi geçişi)
             bot.lap++;
             if (bot.lap >= MAX_LAPS) {
                 bot.finished = true;
@@ -226,29 +245,29 @@ function updateBot(bot, dt) {
         }
     }
 
-    // Direksiyon
-    const steerInput = angleDiff > 0.1 ? { left: false, right: true } : (angleDiff < -0.1 ? { left: true, right: false } : { left: false, right: false });
-    // Gaz / fren
+    const steerInput = angleDiff > 0.2 ? { left: false, right: true } : (angleDiff < -0.2 ? { left: true, right: false } : { left: false, right: false });
     const gasInput = { up: true, down: false };
-    if (Math.abs(angleDiff) > 0.8 && bot.speed > 180) {
+    if (Math.abs(angleDiff) > 0.9 && bot.speed > 14) {
         gasInput.up = false;
-        gasInput.down = true; // virajda yavaşla
+        gasInput.down = true;
     }
 
-    // Botun input'u ile fizik güncelle
-    const input = { ...gasInput, ...steerInput };
-    updateCarPhysics(bot, input, dt);
+    updateCarPhysics(bot, { ...gasInput, ...steerInput }, dt);
 }
 
-// Bitiş çizgisi geçişini kontrol et
-function checkFinishLineCross(car, prevX, prevY) {
+// Bitiş çizgisi geçişi kontrolü
+function checkFinishLineCross(car, prevX, prevZ) {
     if (car.finished) return false;
-    const prevPos = { x: prevX, y: prevY };
-    const currPos = { x: car.x, y: car.y };
-    if (segmentsIntersect(prevPos, currPos, FINISH_LINE.p1, FINISH_LINE.p2)) {
-        // Hareket yönünü kontrol et (ileri doğru mu?)
-        const moveVec = { x: currPos.x - prevPos.x, y: currPos.y - prevPos.y };
-        const lineVec = { x: FINISH_LINE.p2.x - FINISH_LINE.p1.x, y: FINISH_LINE.p2.y - FINISH_LINE.p1.y };
+    const prevPos = { x: prevX, z: prevZ };
+    const currPos = { x: car.x, z: car.z };
+    // Z eksenini Y gibi kullan, segment kontrolü için uyarla
+    const p1 = { x: prevPos.x, y: prevPos.z };
+    const p2 = { x: currPos.x, y: currPos.z };
+    const p3 = { x: FINISH_LINE.p1.x, y: FINISH_LINE.p1.z };
+    const p4 = { x: FINISH_LINE.p2.x, y: FINISH_LINE.p2.z };
+    if (segmentsIntersect(p1, p2, p3, p4)) {
+        const moveVec = { x: p2.x - p1.x, y: p2.y - p1.y };
+        const lineVec = { x: p4.x - p3.x, y: p4.y - p3.y };
         const dot = moveVec.x * lineVec.x + moveVec.y * lineVec.y;
         if (dot > 0) {
             car.lap++;
@@ -281,44 +300,44 @@ function startRace(room) {
     room.startTime = Date.now();
     io.to(room.id).emit('race-start');
 
-    // Önceki pozisyonları tut (bitiş çizgisi için)
-    const prevPositions = new Map(); // id -> {x, y}
+    // Önceki pozisyonları sıfırla
+    room.prevPositions.clear();
     for (const [id, player] of room.players) {
-        prevPositions.set(id, { x: player.x, y: player.y });
+        room.prevPositions.set(id, { x: player.x, z: player.z });
     }
-    room.bots.forEach(bot => prevPositions.set(bot.id, { x: bot.x, y: bot.y }));
+    for (const bot of room.bots) {
+        room.prevPositions.set(bot.id, { x: bot.x, z: bot.z });
+    }
 
-    // Fizik tick döngüsü
+    // Yetkili fizik döngüsü (60Hz)
     room.raceInterval = setInterval(() => {
-        const dt = TICK_RATE / 1000; // saniye cinsinden
+        const dt = TICK_RATE / 1000;
 
         // Oyuncuları güncelle
         for (const [id, player] of room.players) {
             if (player.finished) continue;
             updateCarPhysics(player, player.input, dt);
-            // Bitiş çizgisi kontrolü
-            const prev = prevPositions.get(id);
+            const prev = room.prevPositions.get(id);
             if (prev) {
-                checkFinishLineCross(player, prev.x, prev.y);
+                checkFinishLineCross(player, prev.x, prev.z);
+                room.prevPositions.set(id, { x: player.x, z: player.z });
             }
-            prevPositions.set(id, { x: player.x, y: player.y });
         }
 
         // Botları güncelle
         for (const bot of room.bots) {
             if (bot.finished) continue;
             updateBot(bot, dt);
-            const prev = prevPositions.get(bot.id);
+            const prev = room.prevPositions.get(bot.id);
             if (prev) {
-                checkFinishLineCross(bot, prev.x, prev.y);
+                checkFinishLineCross(bot, prev.x, prev.z);
+                room.prevPositions.set(bot.id, { x: bot.x, z: bot.z });
             }
-            prevPositions.set(bot.id, { x: bot.x, y: bot.y });
         }
 
-        // Yarış bitiş kontrolü (tüm insan oyuncular bitince veya zaman aşımı)
+        // Yarış bitiş kontrolü (tüm insan oyuncular bitince)
         const humanFinished = [...room.players.values()].every(p => p.finished);
-        const botFinished = room.bots.every(b => b.finished);
-        if (humanFinished || (Date.now() - room.startTime > 120000)) {
+        if (humanFinished || (Date.now() - room.startTime > 180000)) {
             room.status = 'finished';
             clearInterval(room.raceInterval);
             room.raceInterval = null;
@@ -326,7 +345,7 @@ function startRace(room) {
         }
     }, TICK_RATE);
 
-    // Durum yayın aralığı (her BROADCAST_RATE ms'de bir)
+    // Durum yayını (20Hz, istemci interpolasyon yapacak)
     room.broadcastInterval = setInterval(() => {
         if (room.status === 'racing' || room.status === 'finished') {
             io.to(room.id).emit('game-state', getGameState(room));
@@ -340,16 +359,16 @@ function getGameState(room) {
         players.push({
             id: p.id,
             name: p.name,
-            x: p.x, y: p.y, angle: p.angle, speed: p.speed,
+            x: p.x, z: p.z, angle: p.angle, speed: p.speed,
             lap: p.lap, finished: p.finished
         });
     }
     const bots = room.bots.map(b => ({
         id: b.id,
-        x: b.x, y: b.y, angle: b.angle, speed: b.speed,
+        x: b.x, z: b.z, angle: b.angle, speed: b.speed,
         lap: b.lap, finished: b.finished
     }));
-    return { players, bots, status: room.status };
+    return { players, bots, status: room.status, serverTime: Date.now() };
 }
 
 function getRaceResults(room) {
@@ -368,13 +387,11 @@ io.on('connection', (socket) => {
     console.log(`Oyuncu bağlandı: ${socket.id}`);
 
     socket.on('create-room', (playerName) => {
-        // Oda oluştur (4 haneli rastgele ID)
         const roomId = Math.floor(1000 + Math.random() * 9000).toString();
         const room = createRoom(roomId);
         addPlayer(room, socket, playerName);
         fillBots(room);
         socket.emit('room-created', { roomId, players: [...room.players.keys()] });
-        console.log(`Oda oluşturuldu: ${roomId}`);
     });
 
     socket.on('join-room', ({ roomId, playerName }) => {
@@ -418,7 +435,6 @@ io.on('connection', (socket) => {
             fillBots(room);
             if (room.players.size === 0) {
                 removeRoom(room.id);
-                console.log(`Oda silindi: ${room.id}`);
             } else {
                 io.to(room.id).emit('player-left', socket.id);
             }
@@ -427,8 +443,7 @@ io.on('connection', (socket) => {
     });
 });
 
-// Sunucuyu başlat
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-    console.log(`OsRace sunucusu ${PORT} portunda çalışıyor.`);
+    console.log(`OsRace 3D sunucusu ${PORT} portunda çalışıyor.`);
 });
