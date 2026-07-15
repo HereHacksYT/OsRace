@@ -1,0 +1,103 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    background: #1a1a2e;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    font-family: 'Segoe UI', sans-serif;
+    overflow: hidden;
+}
+
+#menu {
+    text-align: center;
+    color: #eee;
+}
+
+#menu h1 {
+    font-size: 3rem;
+    margin-bottom: 20px;
+    color: #f0a500;
+    text-shadow: 2px 2px 0 #000;
+}
+
+button {
+    display: block;
+    margin: 10px auto;
+    padding: 12px 30px;
+    font-size: 1.2rem;
+    border: none;
+    border-radius: 8px;
+    background: #16213e;
+    color: #e0e0e0;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+button:hover {
+    background: #0f3460;
+}
+
+#multiplayerPanel {
+    margin-top: 20px;
+}
+
+input {
+    padding: 8px;
+    margin: 5px;
+    border-radius: 5px;
+    border: 1px solid #ccc;
+    font-size: 1rem;
+}
+
+.hidden {
+    display: none !important;
+}
+
+#gameUI {
+    position: relative;
+}
+
+#gameCanvas {
+    background: #2d5a27;
+    display: block;
+    border: 3px solid #555;
+    border-radius: 10px;
+}
+
+#hud {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    color: white;
+    font-weight: bold;
+    text-shadow: 1px 1px 2px black;
+    font-size: 1.3rem;
+}
+
+#countdownDisplay {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 6rem;
+    color: #f0a500;
+    text-shadow: 4px 4px 0 #000;
+}
+
+#messageBox {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 2.5rem;
+    background: rgba(0,0,0,0.7);
+    padding: 20px 40px;
+    border-radius: 15px;
+    color: white;
+}
