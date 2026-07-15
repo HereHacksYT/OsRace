@@ -133,7 +133,7 @@ ground.rotation.x = -Math.PI / 2;
 ground.receiveShadow = true;
 scene.add(ground);
 
-// Pist oluştur
+// Pist oluştur - TÜNEL YOK, SADECE YAN DUVARLAR
 function createTrack() {
     const trackGroup = new THREE.Group();
     const points = WAYPOINTS.map(wp => new THREE.Vector3(wp.x, 0.02, wp.z));
@@ -167,10 +167,10 @@ function createTrack() {
         trackGroup.add(rightLine);
     }
 
-    // Duvarlar (sadece yanlarda)
-    const wallHeight = 1.5;
-    const wallThickness = 0.4;
-    const wallMat = new THREE.MeshStandardMaterial({ color: 0x8B4513, roughness: 0.7 });
+    // DUVARLAR: SADECE YANLARDA, ÜST AÇIK (yarım yükseklikte bariyer)
+    const wallHeight = 0.8;  // Alçak bariyer, üstü tamamen açık
+    const wallThickness = 0.3;
+    const wallMat = new THREE.MeshStandardMaterial({ color: 0xff4444, roughness: 0.5, emissive: 0x330000 });
     const wallEdgePoints = curve.getPoints(500);
     for (let i = 0; i < wallEdgePoints.length - 1; i++) {
         const p1 = wallEdgePoints[i];
@@ -180,18 +180,25 @@ function createTrack() {
         const length = dir.length();
         dir.normalize();
         const perp = new THREE.Vector3(-dir.z, 0, dir.x);
-        const wallGeom = new THREE.BoxGeometry(wallThickness, wallHeight, length);
-        const leftWall = new THREE.Mesh(wallGeom, wallMat);
+
+        // Sol bariyer (alçak)
+        const leftWallGeom = new THREE.BoxGeometry(wallThickness, wallHeight, length);
+        const leftWall = new THREE.Mesh(leftWallGeom, wallMat);
         leftWall.position.copy(mid.clone().addScaledVector(perp, TRACK_HALF));
-        leftWall.position.y = wallHeight / 2;
+        leftWall.position.y = wallHeight / 2;  // Yerin üstünde başlar
         leftWall.rotation.y = Math.atan2(dir.x, dir.z);
-        leftWall.castShadow = true; leftWall.receiveShadow = true;
+        leftWall.castShadow = true;
+        leftWall.receiveShadow = true;
         trackGroup.add(leftWall);
-        const rightWall = new THREE.Mesh(wallGeom, wallMat);
+
+        // Sağ bariyer (alçak)
+        const rightWallGeom = new THREE.BoxGeometry(wallThickness, wallHeight, length);
+        const rightWall = new THREE.Mesh(rightWallGeom, wallMat);
         rightWall.position.copy(mid.clone().addScaledVector(perp, -TRACK_HALF));
-        rightWall.position.y = wallHeight / 2;
+        rightWall.position.y = wallHeight / 2;  // Yerin üstünde başlar
         rightWall.rotation.y = Math.atan2(dir.x, dir.z);
-        rightWall.castShadow = true; rightWall.receiveShadow = true;
+        rightWall.castShadow = true;
+        rightWall.receiveShadow = true;
         trackGroup.add(rightWall);
     }
 
@@ -206,7 +213,7 @@ function createTrack() {
 }
 createTrack();
 
-// Seyirci / ağaçlar
+// Ağaçlar
 for (let i = 0; i < 40; i++) {
     const treeGroup = new THREE.Group();
     const trunkGeom = new THREE.CylinderGeometry(0.4, 0.5, 2.5);
@@ -251,7 +258,7 @@ const carMeshes = new Map();
 const playerCar = createCarModel(0xff4500);
 scene.add(playerCar);
 
-// ========== Klavye & Dokunmatik ==========
+// ========== Kontroller ==========
 const keys = { up: false, down: false, left: false, right: false };
 
 window.addEventListener('keydown', (e) => {
@@ -274,6 +281,7 @@ window.addEventListener('keyup', (e) => {
     if (networkGame) networkGame.sendInput();
 });
 
+// Mobil dokunmatik
 function setupTouchControls() {
     const btns = {
         steerLeft: 'left', steerRight: 'right',
@@ -356,6 +364,7 @@ class NetworkGame {
         });
         this.socket.on('game-state', (state) => {
             this.serverState = state;
+            // Kendi pozisyonumuzu düzelt
             const me = state.players.find(p => p.id === this.myId);
             if (me) {
                 this.serverPos = { x: me.x, z: me.z, angle: me.angle, speed: me.speed };
@@ -364,6 +373,7 @@ class NetworkGame {
                 this.predictedPos.angle = me.angle;
                 this.predictedPos.speed = me.speed;
             }
+            // Diğer oyuncular
             for (const p of state.players) {
                 if (p.id === this.myId) continue;
                 if (!this.entities.has(p.id)) {
@@ -380,6 +390,24 @@ class NetworkGame {
                     e.lastUpdate = performance.now();
                 }
             }
+            // Botlar
+            if (state.bots) {
+                for (const b of state.bots) {
+                    if (!this.entities.has(b.id)) {
+                        const mesh = createCarModel(0x32cd32);
+                        scene.add(mesh);
+                        this.entities.set(b.id, {
+                            mesh, target: { x: b.x, z: b.z, angle: b.angle },
+                            current: { x: b.x, z: b.z, angle: b.angle },
+                            lastUpdate: performance.now()
+                        });
+                    } else {
+                        const e = this.entities.get(b.id);
+                        e.target = { x: b.x, z: b.z, angle: b.angle };
+                        e.lastUpdate = performance.now();
+                    }
+                }
+            }
         });
         this.socket.on('race-end', (results) => {
             this.state = 'finished';
@@ -387,18 +415,20 @@ class NetworkGame {
             sound.playFinish();
             document.getElementById('messageBox').textContent = 'Yarış Bitti!';
             document.getElementById('messageBox').classList.remove('hidden');
+            console.log('Sonuçlar:', results);
         });
         this.socket.on('error', (msg) => alert('Hata: ' + msg));
     }
 
     sendInput() {
         if (this.socket.connected) {
-            this.socket.emit('input', keys);
+            this.socket.emit('input', { up: keys.up, down: keys.down, left: keys.left, right: keys.right });
         }
     }
 
     update(dt) {
         if (this.state !== 'racing') return;
+        // İstemci tahmini
         let angle = this.predictedPos.angle;
         let speed = this.predictedPos.speed;
         if (keys.left) angle -= 2.8 * dt;
@@ -418,6 +448,7 @@ class NetworkGame {
         updateCamera(playerCar.position, this.predictedPos.angle);
         sound.updateEngine(speed, 22);
 
+        // Diğer varlıkların interpolasyonu
         const now = performance.now();
         for (const [, e] of this.entities) {
             const t = Math.min((now - e.lastUpdate) / 50, 1);
