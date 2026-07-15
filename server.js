@@ -60,7 +60,7 @@ function distance(a, b) {
 function normalizeAngle(angle) {
     while (angle > Math.PI) angle -= Math.PI * 2;
     while (angle < -Math.PI) angle += Math.PI * 2;
-    return angle;
+    return angle; // DÜZELTİLDİ: Eskiden kendini çağırıyordu
 }
 
 function angleDifference(a, b) {
@@ -193,25 +193,29 @@ function createBot(index) {
 }
 
 function fillBots(room) {
-    const totalHumans = room.players.size;
-    const needed = MAX_BOTS;
     room.bots = [];
-    for (let i = 0; i < needed; i++) {
+    for (let i = 0; i < MAX_BOTS; i++) {
         room.bots.push(createBot(i));
     }
 }
 
 function updateCarPhysics(car, input, dt) {
     if (car.finished) return;
+    
+    // Direksiyon
     if (input.left) car.angle -= CAR_STEER_SPEED * dt;
     if (input.right) car.angle += CAR_STEER_SPEED * dt;
+    
+    // Gaz / Fren
     if (input.up) car.speed += CAR_ACCELERATION * dt;
     else if (input.down) car.speed -= CAR_BRAKE * dt;
     else car.speed *= CAR_FRICTION;
 
+    // Hız sınırı
     if (car.speed > CAR_MAX_SPEED) car.speed = CAR_MAX_SPEED;
     if (car.speed < -CAR_MAX_SPEED / 2) car.speed = -CAR_MAX_SPEED / 2;
 
+    // Pozisyon güncelle
     car.x += Math.sin(car.angle) * car.speed * dt;
     car.z += Math.cos(car.angle) * car.speed * dt;
 
@@ -288,10 +292,15 @@ function checkFinishLineCross(car, prevX, prevZ) {
 function startCountdown(room) {
     room.status = 'countdown';
     room.countdown = 3;
+    
+    io.to(room.id).emit('countdown', room.countdown);
+    room.countdown--;
+    
     const countdownInterval = setInterval(() => {
-        io.to(room.id).emit('countdown', room.countdown);
-        room.countdown--;
-        if (room.countdown < 0) {
+        if (room.countdown >= 0) {
+            io.to(room.id).emit('countdown', room.countdown);
+            room.countdown--;
+        } else {
             clearInterval(countdownInterval);
             startRace(room);
         }
@@ -399,6 +408,9 @@ io.on('connection', (socket) => {
         addPlayer(room, socket, playerName);
         fillBots(room);
         socket.emit('room-created', { roomId, players: [...room.players.keys()] });
+        // Tek oyunculu modda otomatik başlat
+        setTimeout(() => startCountdown(room), 1500);
+        console.log(`${playerName} oda oluşturdu: ${roomId} - Otomatik başlıyor`);
     });
 
     socket.on('join-room', ({ roomId, playerName }) => {
@@ -410,6 +422,11 @@ io.on('connection', (socket) => {
         fillBots(room);
         socket.emit('joined-room', { roomId, players: [...room.players.keys()] });
         io.to(roomId).emit('player-joined', { id: socket.id, name: playerName });
+        // 2. oyuncu katılınca otomatik başlat
+        if (room.players.size === MAX_PLAYERS) {
+            setTimeout(() => startCountdown(room), 1000);
+        }
+        console.log(`${playerName} odaya katıldı: ${roomId}`);
     });
 
     socket.on('start-race', () => {
