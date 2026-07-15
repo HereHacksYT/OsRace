@@ -1,7 +1,7 @@
 {
   "name": "osrace-3d",
-  "version": "3.0.0",
-  "description": "OsRace 3D - 2 Kişilik Çarpışmalı Uzun Pist Yarışı",
+  "version": "4.0.0",
+  "description": "OsRace 3D - Haritalı Çarpışmalı Yarış",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
