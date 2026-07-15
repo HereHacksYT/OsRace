@@ -26,21 +26,21 @@ const TRACK_WIDTH = 14;
 const TRACK_HALF = TRACK_WIDTH / 2;
 const WAYPOINT_RADIUS = 5;
 
-// Büyük, gerçekçi pist noktaları (düzlük + viraj)
+// Pist noktaları (GLB modelindeki pistin orta çizgisi)
 const WAYPOINTS = [
-    { x: 0, z: 20 },      // Başlangıç düzlüğü
+    { x: 0, z: 20 },
     { x: 30, z: 15 },
-    { x: 60, z: 5 },      // Uzun düzlük
+    { x: 60, z: 5 },
     { x: 80, z: -15 },
-    { x: 70, z: -45 },    // Viraj
+    { x: 70, z: -45 },
     { x: 40, z: -60 },
-    { x: 0, z: -55 },     // Arka düzlük
+    { x: 0, z: -55 },
     { x: -35, z: -40 },
-    { x: -60, z: -15 },   // Sol viraj
+    { x: -60, z: -15 },
     { x: -65, z: 15 },
-    { x: -45, z: 40 },    // Tepe düzlüğü
+    { x: -45, z: 40 },
     { x: -15, z: 45 },
-    { x: 0, z: 20 }       // Bitiş çizgisi
+    { x: 0, z: 20 }
 ];
 
 const START_POSITIONS = [
@@ -75,14 +75,13 @@ function segmentsIntersect(p1, p2, p3, p4) {
     return (ccw(p1, p3, p4) !== ccw(p2, p3, p4)) && (ccw(p1, p2, p3) !== ccw(p1, p2, p4));
 }
 
-// Pist dışı kontrolü (yol genişliğine göre)
 function isOffTrack(carX, carZ) {
     let minDist = Infinity;
     for (const wp of WAYPOINTS) {
         const d = distance({ x: carX, z: carZ }, wp);
         if (d < minDist) minDist = d;
     }
-    return minDist > TRACK_HALF + 2;
+    return minDist > TRACK_HALF + 3;
 }
 
 function findClosestWaypoint(x, z) {
@@ -114,9 +113,12 @@ function checkCarCollision(car1, car2) {
             car1.speed *= 0.7;
             car2.speed *= 0.7;
         }
+        return true;
     }
+    return false;
 }
 
+// Odalar
 const rooms = new Map();
 
 function createRoom(roomId) {
@@ -137,6 +139,7 @@ function createRoom(roomId) {
 }
 
 function getRoom(roomId) { return rooms.get(roomId); }
+
 function removeRoom(roomId) {
     const room = rooms.get(roomId);
     if (room) {
@@ -151,12 +154,12 @@ function addPlayer(room, socket, playerName) {
     const pos = START_POSITIONS[idx % START_POSITIONS.length];
     const player = {
         id: socket.id,
-        name: playerName || `Oyuncu ${idx+1}`,
+        name: playerName || `Oyuncu ${idx + 1}`,
         x: pos.x, z: pos.z,
         angle: Math.atan2(WAYPOINTS[1].x - WAYPOINTS[0].x, WAYPOINTS[1].z - WAYPOINTS[0].z),
         speed: 0, lap: 0,
         input: { up: false, down: false, left: false, right: false },
-        finished: false, finishTime: 0
+        finished: false, finishTime: 0,
     };
     room.players.set(socket.id, player);
     socket.join(room.id);
@@ -164,7 +167,9 @@ function addPlayer(room, socket, playerName) {
     return player;
 }
 
-function removePlayer(room, socketId) { room.players.delete(socketId); }
+function removePlayer(room, socketId) {
+    room.players.delete(socketId);
+}
 
 function createBot(index) {
     const pos = START_POSITIONS[index % 2];
@@ -173,13 +178,15 @@ function createBot(index) {
         x: pos.x + (index * 2), z: pos.z + (index * 2),
         angle: Math.atan2(WAYPOINTS[1].x - WAYPOINTS[0].x, WAYPOINTS[1].z - WAYPOINTS[0].z),
         speed: 0, lap: 0, waypointIndex: 0,
-        finished: false, finishTime: 0
+        finished: false, finishTime: 0,
     };
 }
 
 function fillBots(room) {
     room.bots = [];
-    for (let i = 0; i < MAX_BOTS; i++) room.bots.push(createBot(i));
+    for (let i = 0; i < MAX_BOTS; i++) {
+        room.bots.push(createBot(i));
+    }
 }
 
 function updateCarPhysics(car, input, dt) {
@@ -190,7 +197,7 @@ function updateCarPhysics(car, input, dt) {
     else if (input.down) car.speed -= CAR_BRAKE * dt;
     else car.speed *= CAR_FRICTION;
     if (car.speed > CAR_MAX_SPEED) car.speed = CAR_MAX_SPEED;
-    if (car.speed < -CAR_MAX_SPEED/2) car.speed = -CAR_MAX_SPEED/2;
+    if (car.speed < -CAR_MAX_SPEED / 2) car.speed = -CAR_MAX_SPEED / 2;
     car.x += Math.sin(car.angle) * car.speed * dt;
     car.z += Math.cos(car.angle) * car.speed * dt;
     if (isOffTrack(car.x, car.z)) {
@@ -198,7 +205,7 @@ function updateCarPhysics(car, input, dt) {
         const c = findClosestWaypoint(car.x, car.z);
         const dx = car.x - c.x, dz = car.z - c.z;
         const d = Math.hypot(dx, dz);
-        if (d > 0) { car.x -= (dx/d)*0.6; car.z -= (dz/d)*0.6; }
+        if (d > 0) { car.x -= (dx / d) * 0.6; car.z -= (dz / d) * 0.6; }
     }
 }
 
@@ -228,9 +235,9 @@ function checkFinishLineCross(car, prevX, prevZ) {
     const p3 = { x: FINISH_LINE.p1.x, y: FINISH_LINE.p1.z };
     const p4 = { x: FINISH_LINE.p2.x, y: FINISH_LINE.p2.z };
     if (segmentsIntersect(p1, p2, p3, p4)) {
-        const mv = { x: p2.x-p1.x, y: p2.y-p1.y };
-        const lv = { x: p4.x-p3.x, y: p4.y-p3.y };
-        if (mv.x*lv.x + mv.y*lv.y > 0) {
+        const mv = { x: p2.x - p1.x, y: p2.y - p1.y };
+        const lv = { x: p4.x - p3.x, y: p4.y - p3.y };
+        if (mv.x * lv.x + mv.y * lv.y > 0) {
             car.lap++;
             if (car.lap >= MAX_LAPS) { car.finished = true; car.finishTime = Date.now(); }
             return true;
@@ -273,7 +280,7 @@ function startRace(room) {
             if (prev) { checkFinishLineCross(b, prev.x, prev.z); room.prevPositions.set(b.id, { x: b.x, z: b.z }); }
         }
         for (let i = 0; i < all.length; i++)
-            for (let j = i+1; j < all.length; j++)
+            for (let j = i + 1; j < all.length; j++)
                 if (!all[i].finished && !all[j].finished) checkCarCollision(all[i], all[j]);
         if (all.every(c => c.finished) || Date.now() - room.startTime > 300000) {
             room.status = 'finished';
@@ -300,42 +307,51 @@ function getGameState(room) {
 
 function getRaceResults(room) {
     const all = [...room.players.values(), ...room.bots];
-    all.sort((a,b) => (a.finished && b.finished) ? a.finishTime - b.finishTime : (a.finished ? -1 : b.finished ? 1 : b.lap - a.lap));
+    all.sort((a, b) => (a.finished && b.finished) ? a.finishTime - b.finishTime : (a.finished ? -1 : b.finished ? 1 : b.lap - a.lap));
     return all.map(c => ({ id: c.id, name: c.name || c.id, lap: c.lap, finished: c.finished }));
 }
 
-io.on('connection', socket => {
-    console.log('Bağlandı:', socket.id);
-    socket.on('create-room', name => {
-        const roomId = Math.floor(1000+Math.random()*9000).toString();
+// --- Socket.IO ---
+io.on('connection', (socket) => {
+    console.log(`🟢 Oyuncu bağlandı: ${socket.id}`);
+
+    socket.on('create-room', (playerName) => {
+        const roomId = Math.floor(1000 + Math.random() * 9000).toString();
         const room = createRoom(roomId);
-        addPlayer(room, socket, name);
+        addPlayer(room, socket, playerName);
         fillBots(room);
         socket.emit('room-created', { roomId });
-        setTimeout(() => startCountdown(room), 1500);
+        setTimeout(() => startCountdown(room), 2000);
+        console.log(`🏁 Oda ${roomId} oluşturuldu - ${playerName}`);
     });
+
     socket.on('join-room', ({ roomId, playerName }) => {
         const room = getRoom(roomId);
-        if (!room) return socket.emit('error', 'Oda yok');
-        if (room.status !== 'waiting') return socket.emit('error', 'Yarış başladı');
-        if (room.players.size >= MAX_PLAYERS) return socket.emit('error', 'Dolu');
+        if (!room) return socket.emit('error', '❌ Oda bulunamadı');
+        if (room.status !== 'waiting') return socket.emit('error', '⚠️ Yarış zaten başlamış');
+        if (room.players.size >= MAX_PLAYERS) return socket.emit('error', '🚫 Oda dolu (max 2 kişi)');
         addPlayer(room, socket, playerName);
         fillBots(room);
         socket.emit('joined-room', { roomId });
         io.to(roomId).emit('player-joined', { id: socket.id, name: playerName });
         if (room.players.size === MAX_PLAYERS) setTimeout(() => startCountdown(room), 1000);
+        console.log(`👤 ${playerName} odaya katıldı: ${roomId}`);
     });
+
     socket.on('start-race', () => {
         const room = getRoom(socket.roomId);
         if (room && room.players.has(socket.id) && room.status === 'waiting') startCountdown(room);
     });
-    socket.on('input', input => {
+
+    socket.on('input', (input) => {
         const room = getRoom(socket.roomId);
         if (room && room.players.has(socket.id)) room.players.get(socket.id).input = input;
     });
+
     socket.on('disconnect', () => {
         const room = getRoom(socket.roomId);
         if (room) {
+            console.log(`🔴 Oyuncu ayrıldı: ${socket.id}`);
             removePlayer(room, socket.id);
             fillBots(room);
             if (room.players.size === 0) removeRoom(room.id);
@@ -345,4 +361,7 @@ io.on('connection', socket => {
 });
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`OsRace ${PORT} portunda`));
+server.listen(PORT, () => {
+    console.log(`🏎️  OsRace 3D sunucusu ${PORT} portunda çalışıyor`);
+    console.log(`📁 GLB model: public/models/RaceMap.glb`);
+});
