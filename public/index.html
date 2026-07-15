@@ -2,19 +2,19 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>OsRace - Çevrimiçi Yarış</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, touch-action: manipulation">
+    <title>OsRace 3D - Yarış</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div id="menu">
-        <h1>🏁 OsRace 🏁</h1>
-        <button id="singlePlayerBtn">Botlarla Tek Başına Oyna</button>
-        <button id="multiplayerBtn">Çevrimiçi Çok Oyunculu</button>
+        <h1>🏁 OsRace 3D 🏁</h1>
+        <button id="singlePlayerBtn">🏎️ Botlarla Tek Başına</button>
+        <button id="multiplayerBtn">🌐 Çevrimiçi Çok Oyunculu</button>
         <div id="multiplayerPanel" class="hidden">
             <input type="text" id="playerNameInput" placeholder="Adın" maxlength="12" />
             <button id="createRoomBtn">Oda Oluştur</button>
-            <div style="margin:10px 0">— veya —</div>
+            <div class="separator">— veya —</div>
             <input type="text" id="roomIdInput" placeholder="Oda ID" maxlength="4" />
             <button id="joinRoomBtn">Odaya Katıl</button>
             <div id="roomInfo" class="hidden">
@@ -25,16 +25,29 @@
     </div>
 
     <div id="gameUI" class="hidden">
-        <canvas id="gameCanvas"></canvas>
         <div id="hud">
             <div id="lapCounter">Tur: 0/3</div>
-            <div id="speedometer">Hız: 0 km/h</div>
+            <div id="speedometer">0 km/h</div>
             <div id="countdownDisplay" class="hidden"></div>
-            <div id="messageBox" class="hidden"></div>
         </div>
+        <!-- Mobil Dokunmatik Kontroller -->
+        <div id="touchControls" class="hidden">
+            <div id="steerLeft" class="touch-btn">◀</div>
+            <div id="steerRight" class="touch-btn">▶</div>
+            <div id="gasBtn" class="touch-btn gas">▲</div>
+            <div id="brakeBtn" class="touch-btn brake">▼</div>
+        </div>
+        <div id="messageBox" class="hidden"></div>
     </div>
 
     <script src="/socket.io/socket.io.js"></script>
-    <script src="game.js"></script>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.152.0/build/three.module.js"
+            }
+        }
+    </script>
+    <script type="module" src="game.js"></script>
 </body>
 </html>
