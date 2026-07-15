@@ -167,8 +167,8 @@ function createTrack() {
         trackGroup.add(rightLine);
     }
 
-    // DUVARLAR: SADECE YANLARDA, ÜST AÇIK (yarım yükseklikte bariyer)
-    const wallHeight = 0.8;  // Alçak bariyer, üstü tamamen açık
+    // DUVARLAR: SADECE YANLARDA, ÜST AÇIK (alçak bariyer)
+    const wallHeight = 0.8;
     const wallThickness = 0.3;
     const wallMat = new THREE.MeshStandardMaterial({ color: 0xff4444, roughness: 0.5, emissive: 0x330000 });
     const wallEdgePoints = curve.getPoints(500);
@@ -181,21 +181,19 @@ function createTrack() {
         dir.normalize();
         const perp = new THREE.Vector3(-dir.z, 0, dir.x);
 
-        // Sol bariyer (alçak)
         const leftWallGeom = new THREE.BoxGeometry(wallThickness, wallHeight, length);
         const leftWall = new THREE.Mesh(leftWallGeom, wallMat);
         leftWall.position.copy(mid.clone().addScaledVector(perp, TRACK_HALF));
-        leftWall.position.y = wallHeight / 2;  // Yerin üstünde başlar
+        leftWall.position.y = wallHeight / 2;
         leftWall.rotation.y = Math.atan2(dir.x, dir.z);
         leftWall.castShadow = true;
         leftWall.receiveShadow = true;
         trackGroup.add(leftWall);
 
-        // Sağ bariyer (alçak)
         const rightWallGeom = new THREE.BoxGeometry(wallThickness, wallHeight, length);
         const rightWall = new THREE.Mesh(rightWallGeom, wallMat);
         rightWall.position.copy(mid.clone().addScaledVector(perp, -TRACK_HALF));
-        rightWall.position.y = wallHeight / 2;  // Yerin üstünde başlar
+        rightWall.position.y = wallHeight / 2;
         rightWall.rotation.y = Math.atan2(dir.x, dir.z);
         rightWall.castShadow = true;
         rightWall.receiveShadow = true;
@@ -364,7 +362,6 @@ class NetworkGame {
         });
         this.socket.on('game-state', (state) => {
             this.serverState = state;
-            // Kendi pozisyonumuzu düzelt
             const me = state.players.find(p => p.id === this.myId);
             if (me) {
                 this.serverPos = { x: me.x, z: me.z, angle: me.angle, speed: me.speed };
@@ -373,7 +370,6 @@ class NetworkGame {
                 this.predictedPos.angle = me.angle;
                 this.predictedPos.speed = me.speed;
             }
-            // Diğer oyuncular
             for (const p of state.players) {
                 if (p.id === this.myId) continue;
                 if (!this.entities.has(p.id)) {
@@ -390,7 +386,6 @@ class NetworkGame {
                     e.lastUpdate = performance.now();
                 }
             }
-            // Botlar
             if (state.bots) {
                 for (const b of state.bots) {
                     if (!this.entities.has(b.id)) {
@@ -428,7 +423,6 @@ class NetworkGame {
 
     update(dt) {
         if (this.state !== 'racing') return;
-        // İstemci tahmini
         let angle = this.predictedPos.angle;
         let speed = this.predictedPos.speed;
         if (keys.left) angle -= 2.8 * dt;
@@ -448,7 +442,6 @@ class NetworkGame {
         updateCamera(playerCar.position, this.predictedPos.angle);
         sound.updateEngine(speed, 22);
 
-        // Diğer varlıkların interpolasyonu
         const now = performance.now();
         for (const [, e] of this.entities) {
             const t = Math.min((now - e.lastUpdate) / 50, 1);
@@ -469,7 +462,27 @@ class NetworkGame {
     }
 }
 
-// ========== Menü ==========
+// ========== MENÜ BUTONLARI ==========
+// Botlarla Tek Başına Oyna
+document.getElementById('singlePlayerBtn').addEventListener('click', () => {
+    sound.init();
+    socket = io();
+    networkGame = new NetworkGame(socket);
+    document.getElementById('menu').classList.add('hidden');
+    document.getElementById('gameUI').classList.remove('hidden');
+    document.getElementById('roomInfo').classList.add('hidden');
+    if ('ontouchstart' in window) document.getElementById('touchControls').classList.remove('hidden');
+    gameMode = 'multiplayer';
+    socket.emit('create-room', 'Oyuncu');
+    animateLoop();
+});
+
+// Çok Oyunculu paneli aç
+document.getElementById('multiplayerBtn').addEventListener('click', () => {
+    document.getElementById('multiplayerPanel').classList.remove('hidden');
+});
+
+// Oda Oluştur
 document.getElementById('createRoomBtn').addEventListener('click', () => {
     sound.init();
     const name = document.getElementById('playerNameInput').value.trim() || 'Oyuncu 1';
@@ -483,6 +496,7 @@ document.getElementById('createRoomBtn').addEventListener('click', () => {
     animateLoop();
 });
 
+// Odaya Katıl
 document.getElementById('joinRoomBtn').addEventListener('click', () => {
     sound.init();
     const name = document.getElementById('playerNameInput').value.trim() || 'Oyuncu 2';
@@ -492,10 +506,18 @@ document.getElementById('joinRoomBtn').addEventListener('click', () => {
     networkGame = new NetworkGame(socket);
     document.getElementById('menu').classList.add('hidden');
     document.getElementById('gameUI').classList.remove('hidden');
+    document.getElementById('roomInfo').classList.add('hidden');
     if ('ontouchstart' in window) document.getElementById('touchControls').classList.remove('hidden');
     gameMode = 'multiplayer';
     socket.emit('join-room', { roomId, playerName: name });
     animateLoop();
+});
+
+// Yarışı Başlat (manuel)
+document.getElementById('startRaceBtn').addEventListener('click', () => {
+    if (networkGame && networkGame.socket) {
+        networkGame.socket.emit('start-race');
+    }
 });
 
 // Ana döngü
